@@ -6,82 +6,110 @@
     <title>preview dashboard</title>
   </head>
   <body>
-    <div class="shell">
-      <aside class="sidebar">
-        <div class="brand">
-          <span class="brand-title">imprint-client</span>
-          <span class="brand-sub">后台管理</span>
+    <div class="app-frame">
+      <header class="app-header">
+        <div class="app-header-brand">
+          <span class="app-header-title">Imprint 控制台</span>
+          <span class="app-header-sub">后台管理</span>
         </div>
-        <nav>
-          <button type="button" class="nav active">总览</button>
-          <button type="button" class="nav">Embed sidecar</button>
-          <button type="button" class="nav">设置</button>
-        </nav>
-        <div class="sidebar-foot">
-          <div class="truncate">~/Documents/GitHub/imprint</div>
+        <div class="locale-toggle">
+          <button type="button" class="btn small active-lang">中文</button>
+          <button type="button" class="btn ghost small">English</button>
         </div>
-      </aside>
-      <main class="main">
-        <div class="hint-bar">open the graph UI in your browser — imprint desk open</div>
-        <section class="panel">
-          <div class="panel-head">
-            <h2>服务总览</h2>
-            <button type="button" class="btn ghost">刷新</button>
-          </div>
-          <div class="cards">
-            <div class="card">
-              <div class="card-top">
-                <h3>Host</h3>
-                <span class="muted">:9470</span>
-                <span class="pill pill-ok">running</span>
-              </div>
-              <p class="card-extra">规则 42</p>
-              <div class="card-actions">
-                <button type="button" class="btn primary">启动栈 (up)</button>
-                <button type="button" class="btn">停止栈 (down)</button>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-top">
-                <h3>Shelves</h3>
-                <span class="pill pill-ok">running</span>
-              </div>
-              <p class="card-extra">indexed: 是 · roots: docs</p>
-              <div class="card-actions"><span class="muted">修改 imprint.yaml 后执行 up</span></div>
-            </div>
-            <div class="card">
-              <div class="card-top">
-                <h3>Desk</h3>
-                <span class="muted">:4173</span>
-                <span class="pill pill-ok">running</span>
-              </div>
-              <p class="card-extra">http://127.0.0.1:4173</p>
-              <div class="card-actions">
-                <button type="button" class="btn">在浏览器打开</button>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-top">
-                <h3>Embed</h3>
-                <span class="muted">:4174</span>
-                <span class="pill pill-ok">running</span>
-                <span class="pill pill-ok">healthy</span>
-                <span class="pill pill-ok">ready</span>
-              </div>
-              <p class="card-extra">ready · 语义查重可用</p>
-              <div class="card-actions">
-                <button type="button" class="btn primary">启动 embed</button>
-                <button type="button" class="btn">停止 embed</button>
-              </div>
-            </div>
-            <div class="card vault-card">
-              <h3>Vault</h3>
-              <p class="mono truncate">~/.imprint/projects/…/vault.db</p>
-              <button type="button" class="btn ghost">在 Finder 中显示</button>
+      </header>
+      <div class="app-body">
+        <aside class="sidebar">
+          <nav>
+            <button type="button" class="nav active">总览</button>
+            <button type="button" class="nav">设置</button>
+          </nav>
+        </aside>
+        <main class="main">
+          <div class="project-bar">
+            <div class="project-bar-label">当前项目</div>
+            <div class="project-bar-path mono">/Users/you/Documents/GitHub/imprint</div>
+            <div class="project-bar-actions">
+              <button type="button" class="btn ghost small">在 Finder 中显示</button>
+              <button type="button" class="btn ghost small">切换项目</button>
             </div>
           </div>
-        </section>
-      </main>
+          <section class="panel">
+            <div class="panel-head">
+              <h2>服务总览</h2>
+              <button type="button" class="btn ghost">刷新</button>
+            </div>
+            <div class="scope-block scope-global">
+              <div class="scope-head">
+                <h3>本机全局</h3>
+                <span class="scope-badge global">Global</span>
+              </div>
+              <p class="scope-hint">Embed sidecar 按端口全机唯一，各 imprint 项目共用（venv 与模型缓存亦全局）。</p>
+              <div class="cards cards-single">
+                <div class="card">
+                  <div class="card-top">
+                    <h3>Embed</h3>
+                    <span class="muted">:4174</span>
+                    <span class="pill pill-ok">running</span>
+                    <span class="pill pill-ok">healthy</span>
+                    <span class="pill pill-ok">ready</span>
+                  </div>
+                  <p class="card-extra">ready · 语义查重可用</p>
+                  <div class="card-actions">
+                    <button type="button" class="btn primary">启动 embed</button>
+                    <button type="button" class="btn">停止 embed</button>
+                    <button type="button" class="btn ghost">安装 / 维护向导</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="scope-block scope-project">
+              <div class="scope-head">
+                <h3>当前项目</h3>
+                <span class="scope-badge project">Project</span>
+              </div>
+              <p class="scope-hint">Host / Shelves / Desk / Vault 随所选项目根目录与 imprint.yaml 变化。</p>
+              <div class="cards">
+                <div class="card">
+                  <div class="card-top">
+                    <h3>Host</h3>
+                    <span class="muted">:9470</span>
+                    <span class="pill pill-ok">running</span>
+                  </div>
+                  <p class="card-extra">规则 42</p>
+                  <div class="card-actions">
+                    <button type="button" class="btn primary">启动栈 (up)</button>
+                    <button type="button" class="btn">停止栈 (down)</button>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-top">
+                    <h3>Shelves</h3>
+                    <span class="pill pill-ok">running</span>
+                  </div>
+                  <p class="card-extra">indexed: 是 · roots: docs</p>
+                  <div class="card-actions"><span class="muted">修改 imprint.yaml 后执行 up</span></div>
+                </div>
+                <div class="card">
+                  <div class="card-top">
+                    <h3>Desk</h3>
+                    <span class="muted">:4173</span>
+                    <span class="pill pill-ok">running</span>
+                  </div>
+                  <p class="card-extra">http://127.0.0.1:4173</p>
+                  <div class="card-actions">
+                    <button type="button" class="btn">在浏览器打开</button>
+                  </div>
+                </div>
+                <div class="card vault-card">
+                  <h3>Vault</h3>
+                  <p class="mono vault-path">~/.imprint/projects/demo/vault.db</p>
+                  <button type="button" class="btn ghost">在 Finder 中显示</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
     </div>
   </body>
 </html>

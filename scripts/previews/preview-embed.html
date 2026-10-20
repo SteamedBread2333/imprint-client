@@ -3,49 +3,69 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="../../src/App.css" />
+    <title>preview embed</title>
   </head>
   <body>
-    <div class="shell">
-      <aside class="sidebar">
-        <div class="brand">
-          <span class="brand-title">imprint-client</span>
-          <span class="brand-sub">后台管理</span>
+    <div class="app-frame">
+      <header class="app-header">
+        <div class="app-header-brand">
+          <span class="app-header-title">Imprint 控制台</span>
+          <span class="app-header-sub">后台管理</span>
         </div>
-        <nav>
-          <button type="button" class="nav">总览</button>
-          <button type="button" class="nav active">Embed sidecar</button>
-          <button type="button" class="nav">设置</button>
-        </nav>
-      </aside>
-      <main class="main">
-        <section class="panel">
-          <h2>Embed 安装向导</h2>
-          <p class="muted">在 imprint 项目根执行 sidecar 安装与模型加载。imprint up 不会自动启动 embed。</p>
-          <ol class="wizard-steps">
-            <li class="current">前置检查</li>
-            <li>安装依赖 (setup.sh)</li>
-            <li>加载模型 (embed prepare)</li>
-            <li>启动 sidecar</li>
-          </ol>
-          <p class="ok-text">Python 3.13 · sidecar …/imprint-embed-sidecar</p>
-          <div class="row">
-            <button type="button" class="btn">运行步骤 1</button>
-            <button type="button" class="btn primary">运行步骤 2</button>
-            <button type="button" class="btn">运行步骤 3</button>
-            <button type="button" class="btn">运行步骤 4</button>
-          </div>
-          <div class="log-panel">
-            <div class="log-toolbar">
-              <span>日志</span>
-              <div>
-                <label class="log-stick"><input type="checkbox" checked /> 自动滚动</label>
-                <button type="button" class="btn ghost">清空视图</button>
-              </div>
+        <div class="locale-toggle">
+          <button type="button" class="btn small active-lang">中文</button>
+          <button type="button" class="btn ghost small">English</button>
+        </div>
+      </header>
+      <div class="app-body">
+        <aside class="sidebar">
+          <nav>
+            <button type="button" class="nav active">总览</button>
+            <button type="button" class="nav">设置</button>
+          </nav>
+        </aside>
+        <main class="main">
+          <div class="project-bar">
+            <div class="project-bar-label">当前项目</div>
+            <div class="project-bar-path mono">/Users/you/Documents/GitHub/imprint</div>
+            <div class="project-bar-actions">
+              <button type="button" class="btn ghost small">在 Finder 中显示</button>
+              <button type="button" class="btn ghost small">切换项目</button>
             </div>
-            <pre class="log-body"><div class="log-line">[stdout] setup: installed into ~/.imprint/plugins/embed/venv</div><div class="log-line">[stderr] embed: starting sidecar (streaming sidecar.log…)</div><div class="log-line">[log] GET /health ready=true</div></pre>
           </div>
-        </section>
-      </main>
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Embed 安装向导</h2>
+              <button type="button" class="btn ghost">返回总览</button>
+            </div>
+            <p class="ok-text" style="margin-top: 0">Sidecar 状态: 运行中 · ready</p>
+            <p class="muted">在 imprint 项目根执行 sidecar 安装与模型加载。imprint up 不会自动启动 embed。</p>
+            <ol class="wizard-steps">
+              <li class="current">前置检查</li>
+              <li>安装依赖 (setup.sh)</li>
+              <li>加载模型 (embed prepare)</li>
+              <li>启动 sidecar</li>
+            </ol>
+            <p class="ok-text">Python 3.13 · sidecar …/imprint-embed-sidecar</p>
+            <div class="row">
+              <button type="button" class="btn">运行步骤 1</button>
+              <button type="button" class="btn">运行步骤 2</button>
+              <button type="button" class="btn">运行步骤 3</button>
+              <button type="button" class="btn">运行步骤 4</button>
+            </div>
+            <div class="log-panel">
+              <div class="log-toolbar">
+                <span>日志</span>
+                <div>
+                  <label class="log-stick"><input type="checkbox" checked /> 自动滚动</label>
+                  <button type="button" class="btn ghost">清空视图</button>
+                </div>
+              </div>
+              <pre class="log-body"><div class="log-line">[stdout] Running scripts/setup.sh…</div><div class="log-line">[stdout] imprint embed prepare — model cached</div><div class="log-line">[stderr] plugin start embed — GET /health ready=true</div></pre>
+            </div>
+          </section>
+        </main>
+      </div>
     </div>
   </body>
 </html>

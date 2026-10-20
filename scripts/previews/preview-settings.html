@@ -3,42 +3,59 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="../../src/App.css" />
+    <title>preview settings</title>
   </head>
   <body>
-    <div class="shell">
-      <aside class="sidebar">
-        <div class="brand">
-          <span class="brand-title">imprint-client</span>
-          <span class="brand-sub">后台管理</span>
+    <div class="app-frame">
+      <header class="app-header">
+        <div class="app-header-brand">
+          <span class="app-header-title">Imprint 控制台</span>
+          <span class="app-header-sub">后台管理</span>
         </div>
-        <nav>
-          <button type="button" class="nav">总览</button>
-          <button type="button" class="nav">Embed sidecar</button>
-          <button type="button" class="nav active">设置</button>
-        </nav>
-      </aside>
-      <main class="main">
-        <section class="panel">
-          <h2>设置</h2>
-          <label class="field">
-            imprint 可执行文件
-            <input value="/Users/you/imprint/imprint" />
-          </label>
-          <label class="field">
-            轮询间隔 (ms)
-            <input type="number" value="2500" />
-          </label>
-          <label class="field">
-            HF_ENDPOINT（可选）
-            <input value="https://hf-mirror.com" placeholder="https://hf-mirror.com" />
-          </label>
-          <label class="field">
-            IMPRINT_HF_ENDPOINT（可选）
-            <input value="" />
-          </label>
-          <button type="button" class="btn primary">保存</button>
-        </section>
-      </main>
+        <div class="locale-toggle">
+          <button type="button" class="btn small active-lang">中文</button>
+          <button type="button" class="btn ghost small">English</button>
+        </div>
+      </header>
+      <div class="app-body">
+        <aside class="sidebar">
+          <nav>
+            <button type="button" class="nav">总览</button>
+            <button type="button" class="nav active">设置</button>
+          </nav>
+        </aside>
+        <main class="main">
+          <div class="project-bar">
+            <div class="project-bar-label">当前项目</div>
+            <div class="project-bar-path mono">/Users/you/Documents/GitHub/imprint</div>
+            <div class="project-bar-actions">
+              <button type="button" class="btn ghost small">在 Finder 中显示</button>
+              <button type="button" class="btn ghost small">切换项目</button>
+            </div>
+          </div>
+          <section class="panel">
+            <h2>设置</h2>
+            <label class="field">
+              imprint 可执行文件
+              <span class="field-hint">请使用 imprint 仓库 go build 的最新版，旧版会导致 embed 启动失败</span>
+              <input value="/Users/you/imprint/imprint" />
+            </label>
+            <label class="field">
+              轮询间隔 (ms)
+              <input type="number" value="2500" />
+            </label>
+            <label class="field">
+              HF_ENDPOINT（可选）
+              <input value="https://hf-mirror.com" placeholder="https://hf-mirror.com" />
+            </label>
+            <label class="field">
+              IMPRINT_HF_ENDPOINT（可选）
+              <input value="" />
+            </label>
+            <button type="button" class="btn primary">保存</button>
+          </section>
+        </main>
+      </div>
     </div>
   </body>
 </html>
