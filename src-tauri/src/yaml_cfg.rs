@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 struct ImprintYaml {
@@ -28,7 +28,6 @@ struct ShelvesConfigInner {
 #[derive(Debug, Deserialize)]
 struct PluginEntry {
     enabled: Option<bool>,
-    package: Option<String>,
     config: Option<HashMap<String, serde_yaml::Value>>,
 }
 

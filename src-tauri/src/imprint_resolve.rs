@@ -220,14 +220,6 @@ fn go_env(key: &str) -> Option<String> {
     Some(v)
 }
 
-pub fn standard_imprint_locations() -> Vec<PathBuf> {
-    go_bin_dirs()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|d| d.join(imprint_exe_name()))
-        .collect()
-}
-
 fn which_on_path(name: &str) -> Option<PathBuf> {
     let out = Command::new("sh")
         .arg("-lc")

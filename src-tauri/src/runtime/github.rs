@@ -75,32 +75,3 @@ fn latest_tag_via_api() -> Result<String, String> {
         .map(|t| t.trim_start_matches('v').to_string())
         .ok_or_else(|| "releases/latest: missing tag_name".into())
 }
-
-pub fn fetch_release_assets_json(tag: &str) -> Result<Value, String> {
-    let client = Client::builder()
-        .user_agent("imprint-console")
-        .build()
-        .map_err(|e| e.to_string())?;
-    let tag = tag.trim().trim_start_matches('v');
-    let url = format!("https://api.github.com/repos/{IMPRINT_GITHUB}/releases/tags/v{tag}");
-    let release: Value = client
-        .get(&url)
-        .header("Accept", "application/vnd.github+json")
-        .send()
-        .map_err(|e| e.to_string())?
-        .json()
-        .map_err(|e| e.to_string())?;
-    if let Some(msg) = release.get("message").and_then(|m| m.as_str()) {
-        return Err(msg.to_string());
-    }
-    Ok(release)
-}
-
-/// Direct browser-style download URL (no GitHub REST assets list).
-pub fn imprint_release_download_url(version: &str, os: &str, arch: &str) -> String {
-    let ver = version.trim().trim_start_matches('v');
-    let ext = if os == "windows" { "zip" } else { "tar.gz" };
-    format!(
-        "https://github.com/SteamedBread2333/imprint/releases/download/v{ver}/imprint-{ver}-{os}-{arch}.{ext}"
-    )
-}

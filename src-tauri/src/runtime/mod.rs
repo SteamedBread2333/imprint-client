@@ -10,5 +10,4 @@ pub use global_embed::{
     save as save_global_embed,
 };
 pub use install::{ensure_all, update_component};
-pub use manifest::RuntimeManifest;
 pub use status::{get_runtime_status, RuntimeStatus};
