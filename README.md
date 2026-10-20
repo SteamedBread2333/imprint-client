@@ -4,7 +4,10 @@
 
 # Imprint Console
 
-**imprint 后台运维控制台** · Tauri 桌面 · v0.1.0
+**imprint 后台运维控制台**
+
+[![release](https://img.shields.io/github/v/release/SteamedBread2333/imprint-console?include_prereleases&style=flat-square)](https://github.com/SteamedBread2333/imprint-console/releases)
+![MIT](https://img.shields.io/badge/license-MIT-c4a574?style=flat-square)
 
 查看 Host / Shelves / Desk、全局 Embed；可自动安装 imprint / Python / sidecar。  
 不是终端用户产品；审计规则请用 [imprint-desk-plugin](https://github.com/SteamedBread2333/imprint-desk-plugin)。
