@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="../../src/App.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-title">imprint-client</span>
+          <span class="brand-sub">后台管理</span>
+        </div>
+        <nav>
+          <button type="button" class="nav">总览</button>
+          <button type="button" class="nav">Embed sidecar</button>
+          <button type="button" class="nav active">设置</button>
+        </nav>
+      </aside>
+      <main class="main">
+        <section class="panel">
+          <h2>设置</h2>
+          <label class="field">
+            imprint 可执行文件
+            <input value="/Users/you/imprint/imprint" />
+          </label>
+          <label class="field">
+            轮询间隔 (ms)
+            <input type="number" value="2500" />
+          </label>
+          <label class="field">
+            HF_ENDPOINT（可选）
+            <input value="https://hf-mirror.com" placeholder="https://hf-mirror.com" />
+          </label>
+          <label class="field">
+            IMPRINT_HF_ENDPOINT（可选）
+            <input value="" />
+          </label>
+          <button type="button" class="btn primary">保存</button>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

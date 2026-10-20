@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="../../src/App.css" />
+    <title>preview dashboard</title>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-title">imprint-client</span>
+          <span class="brand-sub">后台管理</span>
+        </div>
+        <nav>
+          <button type="button" class="nav active">总览</button>
+          <button type="button" class="nav">Embed sidecar</button>
+          <button type="button" class="nav">设置</button>
+        </nav>
+        <div class="sidebar-foot">
+          <div class="truncate">~/Documents/GitHub/imprint</div>
+        </div>
+      </aside>
+      <main class="main">
+        <div class="hint-bar">open the graph UI in your browser — imprint desk open</div>
+        <section class="panel">
+          <div class="panel-head">
+            <h2>服务总览</h2>
+            <button type="button" class="btn ghost">刷新</button>
+          </div>
+          <div class="cards">
+            <div class="card">
+              <div class="card-top">
+                <h3>Host</h3>
+                <span class="muted">:9470</span>
+                <span class="pill pill-ok">running</span>
+              </div>
+              <p class="card-extra">规则 42</p>
+              <div class="card-actions">
+                <button type="button" class="btn primary">启动栈 (up)</button>
+                <button type="button" class="btn">停止栈 (down)</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-top">
+                <h3>Shelves</h3>
+                <span class="pill pill-ok">running</span>
+              </div>
+              <p class="card-extra">indexed: 是 · roots: docs</p>
+              <div class="card-actions"><span class="muted">修改 imprint.yaml 后执行 up</span></div>
+            </div>
+            <div class="card">
+              <div class="card-top">
+                <h3>Desk</h3>
+                <span class="muted">:4173</span>
+                <span class="pill pill-ok">running</span>
+              </div>
+              <p class="card-extra">http://127.0.0.1:4173</p>
+              <div class="card-actions">
+                <button type="button" class="btn">在浏览器打开</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-top">
+                <h3>Embed</h3>
+                <span class="muted">:4174</span>
+                <span class="pill pill-ok">running</span>
+                <span class="pill pill-ok">healthy</span>
+                <span class="pill pill-ok">ready</span>
+              </div>
+              <p class="card-extra">ready · 语义查重可用</p>
+              <div class="card-actions">
+                <button type="button" class="btn primary">启动 embed</button>
+                <button type="button" class="btn">停止 embed</button>
+              </div>
+            </div>
+            <div class="card vault-card">
+              <h3>Vault</h3>
+              <p class="mono truncate">~/.imprint/projects/…/vault.db</p>
+              <button type="button" class="btn ghost">在 Finder 中显示</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
