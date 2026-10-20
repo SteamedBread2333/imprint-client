@@ -92,8 +92,121 @@ fn imprint_exe_name() -> &'static str {
     }
 }
 
+/// Locate the Go toolchain.
+///
+/// A desktop app launched from Finder inherits launchd's PATH
+/// (`/usr/bin:/bin:/usr/sbin:/sbin`). The official installer puts `go` in
+/// `/usr/local/go/bin` and registers that directory in `/etc/paths.d`, which
+/// only login shells pick up. Searching that list (and Homebrew) finds an
+/// install the GUI process cannot see on PATH.
+pub fn resolve_go_executable() -> Option<PathBuf> {
+    let name = go_exe_name();
+    if let Some(path) = std::env::var_os("PATH") {
+        if let Some(found) = first_executable(std::env::split_paths(&path), name) {
+            return Some(found);
+        }
+    }
+    if let Some(found) = first_executable(toolchain_search_dirs(), name) {
+        return Some(found);
+    }
+    which_on_path(name).filter(|p| p.is_file())
+}
+
+pub fn go_command() -> Result<Command, String> {
+    let bin = resolve_go_executable()
+        .ok_or_else(|| "未找到 go 命令。请先安装 Go：https://go.dev/dl/".to_string())?;
+    let mut cmd = Command::new(&bin);
+    if let Some(dir) = bin.parent() {
+        let mut paths = vec![dir.to_path_buf()];
+        if let Some(existing) = std::env::var_os("PATH") {
+            paths.extend(std::env::split_paths(&existing));
+        }
+        if let Ok(joined) = std::env::join_paths(paths) {
+            cmd.env("PATH", joined);
+        }
+    }
+    Ok(cmd)
+}
+
+fn go_exe_name() -> &'static str {
+    #[cfg(windows)]
+    {
+        "go.exe"
+    }
+    #[cfg(not(windows))]
+    {
+        "go"
+    }
+}
+
+fn first_executable(dirs: impl IntoIterator<Item = PathBuf>, name: &str) -> Option<PathBuf> {
+    for dir in dirs {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn toolchain_search_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    #[cfg(target_os = "macos")]
+    dirs.extend(macos_path_helper_dirs());
+    for raw in [
+        "/usr/local/go/bin",
+        "/usr/lib/go/bin",
+        "/opt/homebrew/bin",
+        "/opt/homebrew/opt/go/bin",
+        "/usr/local/bin",
+    ] {
+        dirs.push(PathBuf::from(raw));
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        let home = PathBuf::from(home);
+        dirs.push(home.join("sdk/go/bin"));
+        dirs.push(home.join("go/bin"));
+    }
+    #[cfg(windows)]
+    {
+        if let Ok(pf) = std::env::var("ProgramFiles") {
+            dirs.push(PathBuf::from(pf).join("Go").join("bin"));
+        }
+    }
+    dirs
+}
+
+#[cfg(target_os = "macos")]
+fn macos_path_helper_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Ok(text) = std::fs::read_to_string("/etc/paths") {
+        push_path_lines(&mut dirs, &text);
+    }
+    if let Ok(entries) = std::fs::read_dir("/etc/paths.d") {
+        let mut files: Vec<PathBuf> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
+        files.sort();
+        for path in files {
+            if let Ok(text) = std::fs::read_to_string(&path) {
+                push_path_lines(&mut dirs, &text);
+            }
+        }
+    }
+    dirs
+}
+
+fn push_path_lines(dirs: &mut Vec<PathBuf>, text: &str) {
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        dirs.push(PathBuf::from(line));
+    }
+}
+
 fn go_env(key: &str) -> Option<String> {
-    let out = Command::new("go")
+    let out = go_command()
+        .ok()?
         .args(["env", key])
         .output()
         .ok()?;
@@ -198,4 +311,47 @@ pub fn sync_resolved_imprint_bin(cfg: &mut AppConfig) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_paths_file() {
+        let mut dirs = Vec::new();
+        push_path_lines(&mut dirs, "/usr/bin\n# comment\n\n/usr/local/go/bin\n");
+        assert_eq!(
+            dirs,
+            vec![
+                PathBuf::from("/usr/bin"),
+                PathBuf::from("/usr/local/go/bin")
+            ]
+        );
+    }
+
+    #[test]
+    fn finds_go_when_process_path_is_the_gui_default() {
+        if !Path::new("/usr/local/go/bin/go").is_file()
+            && !Path::new("/opt/homebrew/bin/go").is_file()
+        {
+            return;
+        }
+        let saved = std::env::var_os("PATH");
+        std::env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        let result = go_command().and_then(|mut cmd| {
+            cmd.arg("version")
+                .output()
+                .map_err(|e| e.to_string())
+        });
+        if let Some(saved) = &saved {
+            std::env::set_var("PATH", saved);
+        }
+        let out = result.expect("go version");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
 }

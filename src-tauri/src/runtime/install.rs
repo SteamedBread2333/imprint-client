@@ -12,7 +12,7 @@ use super::paths::{
     SIDECAR_REPO,
 };
 use crate::imprint_resolve::{
-    find_go_installed_imprint, imprint_module_packages, imprint_supports_global_embed,
+    find_go_installed_imprint, go_command, imprint_module_packages, imprint_supports_global_embed,
 };
 use crate::config::{load_config, save_config};
 use super::global_embed::{self, GlobalEmbedDoc};
@@ -308,7 +308,8 @@ fn ensure_imprint(
         }
     }
 
-    if Command::new("go")
+    let mut version_cmd = go_command()?;
+    if version_cmd
         .arg("version")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -330,7 +331,7 @@ fn ensure_imprint(
     for (label, module) in [("imprint", pkg), ("imprint-mcp", mcp_pkg)] {
         let arg = format!("{module}@{version_ref}");
         emit_line(app, stream_id, &format!("runtime: go install {arg}"));
-        let out = Command::new("go")
+        let out = go_command()?
             .arg("install")
             .arg(&arg)
             .output()
