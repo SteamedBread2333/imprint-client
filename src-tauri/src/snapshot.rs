@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::config::AppConfig;
 use crate::imprint::run_imprint_json;
+use crate::runtime::{self, global_embed};
 use crate::yaml_cfg::parse_project_yaml;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,6 +97,54 @@ fn host_url_from_listen(listen: &str) -> String {
     }
 }
 
+fn apply_global_embed(snap: &mut Snapshot) {
+    let (doc, _) = global_embed::load().unwrap_or((global_embed::GlobalEmbedDoc::default(), String::new()));
+    let port = runtime::embed_port(&doc) as i64;
+    snap.embed = PluginRow {
+        id: "embed".into(),
+        enabled: doc.enabled,
+        package: doc.package.clone(),
+        port,
+        running: false,
+        healthy: false,
+        url: format!("http://127.0.0.1:{port}"),
+        error: String::new(),
+        name: String::new(),
+        version: String::new(),
+    };
+    snap.sidecar_log_path = runtime::paths::global_sidecar_log()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default();
+}
+
+fn probe_embed_health(snap: &mut Snapshot) {
+    let port = snap.embed.port;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(3))
+        .build()
+        .ok();
+    if let Some(c) = client {
+        let health_url = format!("http://127.0.0.1:{port}/health");
+        if let Ok(resp) = c.get(&health_url).send() {
+            if resp.status().is_success() {
+                if let Ok(json) = resp.json::<Value>() {
+                    let ready = json.get("ready").and_then(|x| x.as_bool()).unwrap_or(false);
+                    let ok = json.get("ok").and_then(|x| x.as_bool()).unwrap_or(true);
+                    snap.embed_health = Some(EmbedHealthDetail {
+                        ok,
+                        ready,
+                        raw: json,
+                    });
+                    if ok {
+                        snap.embed.running = true;
+                        snap.embed.healthy = ready;
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub fn fetch_snapshot(cfg: &AppConfig) -> Snapshot {
     let mut snap = Snapshot {
         project: cfg.project_root.clone(),
@@ -128,8 +177,10 @@ pub fn fetch_snapshot(cfg: &AppConfig) -> Snapshot {
         yaml_error: String::new(),
     };
 
+    apply_global_embed(&mut snap);
+
     if cfg.project_root.is_empty() {
-        snap.yaml_error = "no project selected".into();
+        probe_embed_health(&mut snap);
         return snap;
     }
 
@@ -137,6 +188,7 @@ pub fn fetch_snapshot(cfg: &AppConfig) -> Snapshot {
         Ok(y) => y,
         Err(e) => {
             snap.yaml_error = e;
+            probe_embed_health(&mut snap);
             return snap;
         }
     };
@@ -145,10 +197,6 @@ pub fn fetch_snapshot(cfg: &AppConfig) -> Snapshot {
     snap.desk_url = format!("http://127.0.0.1:{}", yaml_info.desk_port);
     snap.shelves.enabled = yaml_info.shelves_enabled;
     snap.shelves.roots = yaml_info.shelves_roots;
-    snap.embed.enabled = yaml_info.embed_enabled;
-    snap.embed.package = yaml_info.embed_package_rel;
-    snap.embed.port = yaml_info.embed_port as i64;
-    snap.embed.url = format!("http://127.0.0.1:{}", yaml_info.embed_port);
     snap.desk.port = yaml_info.desk_port as i64;
 
     let cwd = std::path::Path::new(&cfg.project_root);
@@ -185,46 +233,17 @@ pub fn fetch_snapshot(cfg: &AppConfig) -> Snapshot {
         if let Some(arr) = v.as_array() {
             for item in arr {
                 if item.get("id").and_then(|x| x.as_str()) == Some("embed") {
-                    snap.embed = serde_json::from_value(item.clone()).unwrap_or(snap.embed);
+                    let mut row: PluginRow =
+                        serde_json::from_value(item.clone()).unwrap_or(snap.embed.clone());
+                    row.enabled = snap.embed.enabled;
+                    row.package = snap.embed.package.clone();
+                    row.port = snap.embed.port;
+                    snap.embed = row;
                 }
             }
         }
     }
 
-    if !snap.vault.is_empty() {
-        snap.sidecar_log_path = format!(
-            "{}/state/plugins/embed/sidecar.log",
-            snap.vault.trim_end_matches('/')
-        );
-    }
-
-    let client = Client::builder()
-        .timeout(Duration::from_secs(3))
-        .build()
-        .ok();
-    if let Some(c) = client {
-        let health_url = format!("http://127.0.0.1:{}/health", yaml_info.embed_port);
-        if let Ok(resp) = c.get(&health_url).send() {
-            if resp.status().is_success() {
-                if let Ok(json) = resp.json::<Value>() {
-                    let ready = json.get("ready").and_then(|x| x.as_bool()).unwrap_or(false);
-                    let ok = json.get("ok").and_then(|x| x.as_bool()).unwrap_or(true);
-                    snap.embed_health = Some(EmbedHealthDetail {
-                        ok,
-                        ready,
-                        raw: json,
-                    });
-                    // imprint plugin list is a one-shot CLI: it only marks running for
-                    // children it spawned in-process. A sidecar started earlier still
-                    // answers /health — treat that as running for the dashboard.
-                    if ok {
-                        snap.embed.running = true;
-                        snap.embed.healthy = ready;
-                    }
-                }
-            }
-        }
-    }
-
+    probe_embed_health(&mut snap);
     snap
 }

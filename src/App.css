@@ -455,3 +455,50 @@ body {
 .log-line.warn {
   color: var(--warn);
 }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.modal-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  max-width: 520px;
+  width: 100%;
+}
+
+.log-panel.mini {
+  max-height: 120px;
+  overflow: auto;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  margin: 0.75rem 0;
+  padding: 0.5rem;
+  background: #0a0c10;
+  border-radius: 8px;
+}
+
+.runtime-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 1.5rem;
+}
+
+.runtime-list li {
+  margin-bottom: 0.5rem;
+  font-size: 13px;
+}
+
+.runtime-log {
+  white-space: pre-wrap;
+  margin-bottom: 0.75rem;
+}

@@ -82,7 +82,7 @@ jobs:
 
             ### Notes
             - macOS builds are **unsigned** unless you configure Apple signing secrets in the repo; Gatekeeper may prompt on first open.
-            - You still need **imprint** and (for embed) **Python sidecar** on the machine; this app orchestrates them locally.
+            - First launch can **install runtime** (imprint CLI, Python, embed sidecar) when online; embed config is global (`~/.imprint/embed.yaml`).
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

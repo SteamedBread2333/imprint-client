@@ -1,13 +1,17 @@
 mod config;
 mod imprint;
+mod imprint_resolve;
 mod log_tail;
+mod runtime;
 mod snapshot;
 mod state;
 mod yaml_cfg;
 
 use std::path::PathBuf;
 use std::process::Command;
-use tauri::{AppHandle, State};
+use std::sync::Arc;
+use std::thread;
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 use config::{load_config, save_config, AppConfig};
@@ -17,8 +21,10 @@ use state::AppState;
 use yaml_cfg::validate_project;
 
 #[tauri::command]
-fn get_config(app: AppHandle) -> Result<AppConfig, String> {
-    load_config(&app)
+async fn get_config(app: AppHandle) -> Result<AppConfig, String> {
+    tauri::async_runtime::spawn_blocking(move || load_config(&app))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -40,7 +46,6 @@ async fn pick_project_folder(app: AppHandle) -> Result<Option<String>, String> {
 #[serde(rename_all = "camelCase")]
 struct OpenProjectResult {
     project_root: String,
-    embed_package: String,
 }
 
 #[tauri::command]
@@ -49,31 +54,41 @@ fn open_project(app: AppHandle, path: String) -> Result<OpenProjectResult, Strin
     let mut cfg = load_config(&app)?;
     cfg.project_root = path.clone();
     save_config(&app, &cfg)?;
+    let _info = info;
     Ok(OpenProjectResult {
         project_root: path,
-        embed_package: info.embed_package_abs.to_string_lossy().into_owned(),
     })
 }
 
 #[tauri::command]
-fn get_snapshot(app: AppHandle) -> Snapshot {
-    let cfg = load_config(&app).unwrap_or_default();
-    snapshot::fetch_snapshot(&cfg)
+async fn get_snapshot(app: AppHandle) -> Result<Snapshot, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = load_config(&app).unwrap_or_default();
+        Ok(snapshot::fetch_snapshot(&cfg))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn check_prerequisites(app: AppHandle) -> Result<serde_json::Value, String> {
-    let cfg = load_config(&app)?;
-    if cfg.project_root.is_empty() {
-        return Err("select a project first".into());
-    }
-    let py = check_python()?;
-    let info = validate_project(&cfg.project_root)?;
-    Ok(serde_json::json!({
-        "pythonVersion": py,
-        "embedPackage": info.embed_package_abs,
-        "embedPort": info.embed_port,
-    }))
+async fn check_prerequisites(app: AppHandle) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+        let py_path = runtime::paths::managed_python_bin(&app_data);
+        let py_version = if py_path.is_file() {
+            imprint::python_version_at(&py_path)?
+        } else {
+            check_python()?
+        };
+        let (embed, _) = runtime::load_global_embed()?;
+        Ok(serde_json::json!({
+            "pythonVersion": py_version,
+            "embedPackage": embed.package,
+            "embedPort": runtime::embed_port(&embed),
+        }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -84,12 +99,27 @@ fn run_imprint_simple(
     args: Vec<String>,
 ) -> Result<(), String> {
     let cfg = load_config(&app)?;
-    if cfg.project_root.is_empty() {
-        return Err("select a project first".into());
-    }
     ensure_no_job(&state)?;
-    let cwd = PathBuf::from(&cfg.project_root);
-    let bin = cfg.imprint_bin.clone();
+    let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let embed_global = is_embed_global_cmd(&args);
+    if embed_global {
+        runtime::ensure_ready_for_plugin(&app_data)?;
+        let bin = config::effective_imprint_bin(&cfg);
+        if !crate::imprint_resolve::imprint_supports_global_embed(std::path::Path::new(&bin)) {
+            return Err(
+                "当前 imprint 过旧（v1.3.9 无法启动 embed）。请在「设置 → 运行环境」对 imprint 点「更新」，或在 imprint 仓库执行：go install ./cmd/imprint ./cmd/imprint-mcp"
+                    .into(),
+            );
+        }
+    }
+    let cwd = if embed_global {
+        runtime::paths::sidecar_dir(&app_data)
+    } else if cfg.project_root.is_empty() {
+        return Err("select a project first".into());
+    } else {
+        PathBuf::from(&cfg.project_root)
+    };
+    let bin = config::effective_imprint_bin(&cfg);
     let handle = spawn_streaming(
         app.clone(),
         stream_id.clone(),
@@ -110,23 +140,161 @@ fn run_sidecar_setup(
     stream_id: String,
 ) -> Result<(), String> {
     let cfg = load_config(&app)?;
-    if cfg.project_root.is_empty() {
-        return Err("select a project first".into());
-    }
-    let info = validate_project(&cfg.project_root)?;
     ensure_no_job(&state)?;
-    let script = info.embed_package_abs.join("scripts/setup.sh");
-    let cmd = format!("sh {}", script.to_string_lossy());
+    let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let sidecar = runtime::paths::sidecar_dir(&app_data);
+    let script = sidecar.join("scripts/setup.sh");
+    if !script.is_file() {
+        return Err("sidecar not installed — run ensure runtime first".into());
+    }
+    let py = runtime::paths::managed_python_bin(&app_data);
+    let cmd = format!(
+        "PYTHON={} sh {}",
+        shell_escape(&py.to_string_lossy()),
+        script.to_string_lossy()
+    );
     let handle = spawn_streaming(
         app.clone(),
         stream_id.clone(),
         cfg,
-        info.embed_package_abs,
+        sidecar,
         cmd,
         vec![],
         true,
     )?;
     *state.active_job.lock().map_err(|e| e.to_string())? = Some((stream_id, handle));
+    Ok(())
+}
+
+fn is_embed_global_cmd(args: &[String]) -> bool {
+    if args.first().map(|s| s.as_str()) == Some("embed") {
+        return true;
+    }
+    if args.len() >= 3 && args[0] == "plugin" && (args[1] == "start" || args[1] == "stop") {
+        return args[2..].iter().any(|s| s == "embed");
+    }
+    false
+}
+
+fn shell_escape(s: &str) -> String {
+    if s.contains(' ') || s.contains('\'') {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    } else {
+        s.to_string()
+    }
+}
+
+#[tauri::command]
+async fn get_runtime_status_cmd(app: AppHandle) -> Result<runtime::RuntimeStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+        let cfg = load_config(&app)?;
+        Ok(runtime::get_runtime_status(&app_data, &cfg))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn get_global_embed_cmd() -> Result<runtime::GlobalEmbedDoc, String> {
+    runtime::load_global_embed().map(|(d, _)| d)
+}
+
+#[tauri::command]
+fn save_global_embed_cmd(doc: runtime::GlobalEmbedDoc) -> Result<(), String> {
+    runtime::save_global_embed(&doc).map(|_| ())
+}
+
+#[tauri::command]
+fn ensure_runtime(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    stream_id: String,
+) -> Result<(), String> {
+    ensure_no_job(&state)?;
+    if !runtime::status::git_available() {
+        return Err("git is required to clone embed sidecar".into());
+    }
+    let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let app2 = app.clone();
+    let sid = stream_id.clone();
+    let handle = Arc::new(imprint::JobHandle {
+        child: std::sync::Mutex::new(None),
+    });
+    *state.active_job.lock().map_err(|e| e.to_string())? = Some((stream_id.clone(), handle.clone()));
+    thread::spawn(move || {
+        let result = runtime::ensure_all(&app2, &app_data, &sid);
+        if result.is_ok() {
+            if let Ok(mut cfg) = load_config(&app2) {
+                if config::sync_global_imprint_bin(&mut cfg) {
+                    let _ = save_config(&app2, &cfg);
+                }
+            }
+        }
+        if let Err(e) = result {
+            let _ = app2.emit(
+                "job-output",
+                serde_json::json!({ "streamId": sid, "kind": "stderr", "line": e }),
+            );
+        }
+        if let Some(st) = app2.try_state::<AppState>() {
+            if let Ok(mut guard) = st.active_job.lock() {
+                if guard.as_ref().map(|(s, _)| s == &sid).unwrap_or(false) {
+                    *guard = None;
+                }
+            }
+        }
+        let _ = app2.emit(
+            "job-finished",
+            serde_json::json!({ "streamId": sid }),
+        );
+    });
+    Ok(())
+}
+
+#[tauri::command]
+fn update_runtime_component(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    stream_id: String,
+    name: String,
+) -> Result<(), String> {
+    ensure_no_job(&state)?;
+    let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let app2 = app.clone();
+    let sid = stream_id.clone();
+    let component = name.clone();
+    let handle = Arc::new(imprint::JobHandle {
+        child: std::sync::Mutex::new(None),
+    });
+    *state.active_job.lock().map_err(|e| e.to_string())? = Some((stream_id.clone(), handle));
+    thread::spawn(move || {
+        let result = runtime::update_component(&app2, &app_data, &sid, &component);
+        if result.is_ok() && component == "imprint" {
+            if let Ok(mut cfg) = load_config(&app2) {
+                if config::sync_global_imprint_bin(&mut cfg) {
+                    let _ = save_config(&app2, &cfg);
+                }
+            }
+        }
+        if let Err(e) = result {
+            let _ = app2.emit(
+                "job-output",
+                serde_json::json!({ "streamId": sid, "kind": "stderr", "line": e }),
+            );
+        }
+        if let Some(st) = app2.try_state::<AppState>() {
+            if let Ok(mut guard) = st.active_job.lock() {
+                if guard.as_ref().map(|(s, _)| s == &sid).unwrap_or(false) {
+                    *guard = None;
+                }
+            }
+        }
+        let _ = app2.emit(
+            "job-finished",
+            serde_json::json!({ "streamId": sid }),
+        );
+    });
     Ok(())
 }
 
@@ -166,13 +334,15 @@ fn start_sidecar_log_tail(
     state: State<'_, AppState>,
     stream_id: String,
 ) -> Result<(), String> {
-    let cfg = load_config(&app)?;
-    let snap = snapshot::fetch_snapshot(&cfg);
-    if snap.sidecar_log_path.is_empty() {
-        return Err("sidecar log path unknown (run imprint status first)".into());
+    let log_path = runtime::paths::global_sidecar_log()
+        .map_err(|e| e.to_string())?
+        .to_string_lossy()
+        .into_owned();
+    if log_path.is_empty() {
+        return Err("sidecar log path unknown".into());
     }
     stop_tail(&state)?;
-    let handle = log_tail::tail_file(app, stream_id.clone(), snap.sidecar_log_path)?;
+    let handle = log_tail::tail_file(app, stream_id.clone(), log_path)?;
     *state.active_tail.lock().map_err(|e| e.to_string())? = Some((stream_id, handle));
     Ok(())
 }
@@ -210,22 +380,26 @@ fn ensure_no_job(state: &State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn imprint_up_down(app: AppHandle, up: bool) -> Result<String, String> {
-    let cfg = load_config(&app)?;
-    if cfg.project_root.is_empty() {
-        return Err("select a project first".into());
-    }
-    let sub = if up { "up" } else { "down" };
-    let (code, stdout, stderr) =
-        run_imprint_capture(&cfg, PathBuf::from(&cfg.project_root).as_path(), &[sub])?;
-    if code != 0 {
-        return Err(if stderr.trim().is_empty() {
-            stdout
-        } else {
-            stderr
-        });
-    }
-    Ok(stdout)
+async fn imprint_up_down(app: AppHandle, up: bool) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = load_config(&app)?;
+        if cfg.project_root.is_empty() {
+            return Err("select a project first".into());
+        }
+        let sub = if up { "up" } else { "down" };
+        let (code, stdout, stderr) =
+            run_imprint_capture(&cfg, PathBuf::from(&cfg.project_root).as_path(), &[sub])?;
+        if code != 0 {
+            return Err(if stderr.trim().is_empty() {
+                stdout
+            } else {
+                stderr
+            });
+        }
+        Ok(stdout)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -270,6 +444,11 @@ pub fn run() {
             stop_sidecar_log_tail,
             imprint_up_down,
             reveal_in_finder,
+            get_runtime_status_cmd,
+            ensure_runtime,
+            update_runtime_component,
+            get_global_embed_cmd,
+            save_global_embed_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -8,7 +8,7 @@ use std::thread;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::config::AppConfig;
+use crate::config::{self, AppConfig};
 use crate::state::AppState;
 
 pub fn extra_env(cfg: &AppConfig) -> HashMap<String, String> {
@@ -30,7 +30,7 @@ pub fn run_imprint_capture(
     cwd: &Path,
     args: &[&str],
 ) -> Result<(i32, String, String), String> {
-    let mut cmd = Command::new(&cfg.imprint_bin);
+    let mut cmd = Command::new(config::effective_imprint_bin(cfg));
     cmd.args(args).current_dir(cwd).stdout(Stdio::piped()).stderr(Stdio::piped());
     for (k, v) in extra_env(cfg) {
         cmd.env(k, v);
@@ -167,6 +167,18 @@ pub fn kill_job(handle: &JobHandle) -> Result<(), String> {
     }
     *guard = None;
     Ok(())
+}
+
+pub fn python_version_at(bin: &std::path::Path) -> Result<String, String> {
+    let out = Command::new(bin)
+        .arg("-c")
+        .arg("import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+        .output()
+        .map_err(|e| format!("python failed: {e}"))?;
+    if !out.status.success() {
+        return Err("managed python failed version check".into());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 pub fn check_python() -> Result<String, String> {

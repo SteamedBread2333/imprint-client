@@ -5,7 +5,10 @@ import {
   cancelActiveJob,
   releaseActiveJob,
   checkPrerequisites,
+  ensureRuntime,
   getConfig,
+  getGlobalEmbed,
+  getRuntimeStatus,
   getSnapshot,
   imprintUpDown,
   openProject,
@@ -15,10 +18,14 @@ import {
   runImprint,
   runSidecarSetup,
   saveConfig,
+  saveGlobalEmbed,
   startSidecarLogTail,
   stopSidecarLogTail,
   subscribeJobFinished,
   subscribeJobOutput,
+  updateRuntimeComponent,
+  type GlobalEmbedDoc,
+  type RuntimeStatus,
 } from "./api";
 import { Header } from "./components/Header";
 import { EmbedWizard } from "./components/EmbedWizard";
@@ -45,6 +52,8 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [wizardStep, setWizardStep] = useState(0);
   const [prereq, setPrereq] = useState("");
+  const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null);
+  const [bootDismissed, setBootDismissed] = useState(false);
   const locale = localeFromCfg(cfg);
   const m = useMemo(() => t(locale), [locale]);
   const appName = APP_NAME[locale];
@@ -60,17 +69,50 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    getConfig().then(setCfg).catch((e) => setError(String(e)));
+  const refreshRuntime = useCallback(async () => {
+    try {
+      const rs = await getRuntimeStatus();
+      setRuntimeStatus(rs);
+    } catch (e) {
+      setError(String(e));
+    }
   }, []);
 
   useEffect(() => {
-    if (!cfg?.projectRoot) return;
-    refresh();
-    const ms = cfg.pollIntervalMs || 2500;
-    const tmr = setInterval(refresh, ms);
-    return () => clearInterval(tmr);
-  }, [cfg?.projectRoot, cfg?.pollIntervalMs, refresh]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const c = await getConfig();
+        if (!cancelled) setCfg(c);
+      } catch (e) {
+        if (!cancelled) setError(String(e));
+      }
+      if (!cancelled) void refreshRuntime();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshRuntime]);
+
+  useEffect(() => {
+    if (!cfg) return;
+    let cancelled = false;
+    let tmr: ReturnType<typeof setInterval> | undefined;
+    const tick = () => {
+      if (cancelled) return;
+      void refresh();
+    };
+    const startPoll = window.setTimeout(() => {
+      tick();
+      const ms = cfg.pollIntervalMs || 2500;
+      tmr = setInterval(tick, ms);
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(startPoll);
+      if (tmr) clearInterval(tmr);
+    };
+  }, [cfg, cfg?.projectRoot, cfg?.pollIntervalMs, refresh]);
 
   useEffect(() => {
     let unlistenOut: (() => void) | undefined;
@@ -91,6 +133,14 @@ export default function App() {
     subscribeJobFinished(async (id) => {
       if (id !== LOG_STREAM) return;
       setBusy(false);
+      void getRuntimeStatus().then((rs) => {
+        setRuntimeStatus(rs);
+        if (rs.ready) setBootDismissed(true);
+        const imp = rs.components.find((c) => c.name === "imprint");
+        if (imp?.version) {
+          setNotice(`${m.runtimeUpdated}: imprint ${imp.version}`);
+        }
+      });
       const s = await getSnapshot();
       setSnap(s);
       if (s.embedHealth?.ok) {
@@ -100,6 +150,7 @@ export default function App() {
             (s.embedHealth.ready ? m.sidecarReady : m.sidecarNotReady),
         );
       }
+      void refreshRuntime();
       if (showEmbedWizard) {
         startSidecarLogTail(LOG_STREAM).catch(() => {});
       }
@@ -221,20 +272,14 @@ export default function App() {
     void setLocale(next);
   };
 
-  if (!cfg?.projectRoot) {
+  const showBoot =
+    !bootDismissed && runtimeStatus !== null && !runtimeStatus.ready;
+
+  if (!cfg) {
     return (
       <div className="app-frame welcome">
         <Header title={appName} subtitle={m.tagline} locale={locale} onLocale={onLocale} m={m} />
-        <div className="welcome-body">
-          <div className="welcome-card">
-            <h1>{m.pickProject}</h1>
-            <p className="lede">{m.welcomeLead}</p>
-            <button type="button" className="btn primary" onClick={onPickProject}>
-              {m.pickProject}
-            </button>
-            {error && <p className="error">{error}</p>}
-          </div>
-        </div>
+        <p className="lede">{m.welcomeLead}</p>
       </div>
     );
   }
@@ -242,6 +287,36 @@ export default function App() {
   return (
     <div className="app-frame">
       <Header title={appName} subtitle={m.tagline} locale={locale} onLocale={onLocale} m={m} />
+      {showBoot && (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <h2>{m.runtimeTitle}</h2>
+            <p className="muted">{m.runtimeLead}</p>
+            <div className="log-panel mini">{logLines.slice(-8).join("\n") || m.noLogs}</div>
+            <div className="row">
+              <button
+                type="button"
+                className="btn primary"
+                disabled={busy}
+                onClick={() =>
+                  runJob(async () => {
+                    await ensureRuntime(LOG_STREAM);
+                  })
+                }
+              >
+                {m.runtimeEnsure}
+              </button>
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => setBootDismissed(true)}
+              >
+                {m.skipProject}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="app-body">
       <aside className="sidebar">
         <nav>
@@ -268,15 +343,17 @@ export default function App() {
       <main className="main">
         <div className="project-bar">
           <div className="project-bar-label">{m.currentProject}</div>
-          <div className="project-bar-path mono" title={cfg.projectRoot}>
-            {cfg.projectRoot}
+          <div className="project-bar-path mono" title={cfg.projectRoot || m.projectOptional}>
+            {cfg.projectRoot || m.projectOptional}
           </div>
           <div className="project-bar-actions">
-            <button type="button" className="btn ghost small" onClick={() => onRevealPath(cfg.projectRoot)}>
-              {m.openInFinder}
-            </button>
+            {cfg.projectRoot && (
+              <button type="button" className="btn ghost small" onClick={() => onRevealPath(cfg.projectRoot)}>
+                {m.openInFinder}
+              </button>
+            )}
             <button type="button" className="btn ghost small" onClick={onPickProject}>
-              {m.switchProject}
+              {cfg.projectRoot ? m.switchProject : m.pickProject}
             </button>
           </div>
         </div>
@@ -307,6 +384,7 @@ export default function App() {
 
         {page === "dashboard" && !showEmbedWizard && snap && (
           <Dashboard
+            hasProject={!!cfg.projectRoot}
             m={m}
             snap={snap}
             busy={busy}
@@ -341,7 +419,16 @@ export default function App() {
             m={m}
             cfg={cfg}
             locale={locale}
+            runtimeStatus={runtimeStatus}
+            busy={busy}
+            onEnsureRuntime={() => runJob(() => ensureRuntime(LOG_STREAM))}
+            onUpdateComponent={(name) => {
+              setLogLines([]);
+              runJob(() => updateRuntimeComponent(name, LOG_STREAM));
+            }}
             onSave={(c) => saveConfig(c).then(() => setCfg(c))}
+            onRefreshRuntime={refreshRuntime}
+            runtimeLogLines={logLines}
           />
         )}
       </main>
@@ -353,6 +440,7 @@ export default function App() {
 function Dashboard({
   m,
   snap,
+  hasProject,
   busy,
   hostUp,
   embedReady,
@@ -367,6 +455,7 @@ function Dashboard({
 }: {
   m: ReturnType<typeof t>;
   snap: Snapshot;
+  hasProject: boolean;
   busy: boolean;
   hostUp: boolean;
   embedReady: boolean;
@@ -445,6 +534,7 @@ function Dashboard({
         </div>
       </div>
 
+      {hasProject && (
       <div className="scope-block scope-project">
         <div className="scope-head">
           <h3>{m.scopeProject}</h3>
@@ -507,6 +597,7 @@ function Dashboard({
           </div>
         </div>
       </div>
+      )}
     </section>
   );
 }
@@ -548,25 +639,111 @@ function Settings({
   m,
   cfg,
   locale,
+  runtimeStatus,
+  busy,
+  onEnsureRuntime,
+  onUpdateComponent,
   onSave,
+  onRefreshRuntime,
+  runtimeLogLines,
 }: {
   m: ReturnType<typeof t>;
   cfg: AppConfig;
   locale: Locale;
+  runtimeStatus: RuntimeStatus | null;
+  busy: boolean;
+  onEnsureRuntime: () => void;
+  onUpdateComponent: (name: string) => void;
   onSave: (c: AppConfig) => Promise<void>;
+  onRefreshRuntime: () => void;
+  runtimeLogLines: string[];
 }) {
   const [draft, setDraft] = useState(cfg);
+  const [embedDoc, setEmbedDoc] = useState<GlobalEmbedDoc | null>(null);
   useEffect(() => setDraft(cfg), [cfg]);
+  useEffect(() => {
+    getGlobalEmbed().then(setEmbedDoc).catch(() => {});
+  }, [runtimeStatus?.ready]);
 
   return (
     <section className="panel">
       <h2>{m.settings}</h2>
+      <h3>{m.runtimeTitle}</h3>
+      <p className="muted">{runtimeStatus?.ready ? m.runtimeReady : m.runtimeNotReady}</p>
+      <div className="row">
+        <button type="button" className="btn primary" disabled={busy} onClick={onEnsureRuntime}>
+          {m.runtimeEnsure}
+        </button>
+        <button type="button" className="btn ghost" disabled={busy} onClick={onRefreshRuntime}>
+          {m.refresh}
+        </button>
+      </div>
+      {(busy || runtimeLogLines.length > 0) && (
+        <div className="log-panel mini runtime-log">
+          {runtimeLogLines.length > 0
+            ? runtimeLogLines.map((l, i) => <div key={i}>{l}</div>)
+            : m.runtimeUpdating}
+        </div>
+      )}
+      <ul className="runtime-list">
+        {runtimeStatus?.components.map((c) => (
+          <li key={c.name}>
+            <strong>{c.name}</strong>{" "}
+            {c.installed
+              ? c.latest && c.version && c.latest !== c.version
+                ? `${c.version} → ${c.latest}`
+                : c.version || "ok"
+              : c.latest
+                ? `— → ${c.latest}`
+                : "—"}{" "}
+            · <span className="mono">{c.path || "—"}</span>
+            {c.managedByConsole === true && (c.installed || c.name === "imprint") && (
+              <button
+                type="button"
+                className="btn ghost small"
+                disabled={busy}
+                onClick={() => onUpdateComponent(c.name)}
+              >
+                {m.runtimeUpdate}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <h3>{m.globalEmbedTitle}</h3>
+      <p className="muted">{m.globalEmbedHint}</p>
+      {embedDoc && (
+        <>
+          <label className="field">
+            <input
+              type="checkbox"
+              checked={embedDoc.enabled}
+              onChange={(e) => setEmbedDoc({ ...embedDoc, enabled: e.target.checked })}
+            />{" "}
+            {m.globalEmbedEnabled}
+          </label>
+          <label className="field">
+            package
+            <input value={embedDoc.package} readOnly className="mono" />
+          </label>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => saveGlobalEmbed(embedDoc).then(onRefreshRuntime)}
+          >
+            {m.save}
+          </button>
+        </>
+      )}
+      <h3>{m.settings}</h3>
       <label className="field">
         {m.imprintBin}
         <span className="field-hint">{m.imprintBinHint}</span>
         <input
           value={draft.imprintBin}
           onChange={(e) => setDraft({ ...draft, imprintBin: e.target.value })}
+          className="mono"
+          placeholder="imprint 或绝对路径"
         />
       </label>
       <label className="field">

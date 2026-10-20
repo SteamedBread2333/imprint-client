@@ -25,7 +25,7 @@ fn default_locale() -> String {
 }
 
 fn default_imprint_bin() -> String {
-    "imprint".into()
+    String::new()
 }
 
 fn default_poll_ms() -> u64 {
@@ -54,13 +54,43 @@ pub fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("config.json"))
 }
 
+pub fn effective_imprint_bin(cfg: &AppConfig) -> String {
+    crate::imprint_resolve::effective_imprint_bin(cfg)
+}
+
+pub fn sync_global_imprint_bin(cfg: &mut AppConfig) -> bool {
+    crate::imprint_resolve::sync_resolved_imprint_bin(cfg)
+}
+
+fn clear_legacy_imprint_bin_path(cfg: &mut AppConfig) {
+    let s = cfg.imprint_bin.trim();
+    if s.is_empty() {
+        return;
+    }
+    if s.contains("Application Support/imprint")
+        || s.contains("Application Support\\imprint")
+        || s.contains("/.imprint/bin/")
+        || s.contains("\\.imprint\\bin\\")
+        || s.contains("/.local/bin/imprint")
+        || s.contains("\\imprint\\bin\\imprint")
+    {
+        cfg.imprint_bin.clear();
+    }
+}
+
 pub fn load_config(app: &AppHandle) -> Result<AppConfig, String> {
     let path = config_path(app)?;
-    if !path.is_file() {
-        return Ok(AppConfig::default());
+    let mut cfg = if !path.is_file() {
+        AppConfig::default()
+    } else {
+        let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&raw).map_err(|e| e.to_string())?
+    };
+    clear_legacy_imprint_bin_path(&mut cfg);
+    if sync_global_imprint_bin(&mut cfg) {
+        let _ = save_config(app, &cfg);
     }
-    let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&raw).map_err(|e| e.to_string())
+    Ok(cfg)
 }
 
 pub fn save_config(app: &AppHandle, cfg: &AppConfig) -> Result<(), String> {

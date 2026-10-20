@@ -78,8 +78,50 @@ export async function pickProjectFolder(): Promise<string | null> {
   return invoke<string | null>("pick_project_folder");
 }
 
-export async function openProject(path: string): Promise<{ projectRoot: string; embedPackage: string }> {
+export async function openProject(path: string): Promise<{ projectRoot: string }> {
   return invoke("open_project", { path });
+}
+
+export interface ComponentStatus {
+  name: string;
+  installed: boolean;
+  path: string;
+  version: string;
+  latest: string;
+  detail: string;
+  managedByConsole?: boolean;
+}
+
+export interface RuntimeStatus {
+  components: ComponentStatus[];
+  globalEmbedPath: string;
+  ready: boolean;
+}
+
+export interface GlobalEmbedDoc {
+  enabled: boolean;
+  package: string;
+  config: Record<string, unknown>;
+}
+
+export async function getRuntimeStatus(): Promise<RuntimeStatus> {
+  return invoke("get_runtime_status_cmd");
+}
+
+export async function ensureRuntime(streamId: string): Promise<void> {
+  return invoke("ensure_runtime", { streamId });
+}
+
+export async function updateRuntimeComponent(name: string, streamId: string): Promise<void> {
+  return invoke("update_runtime_component", { name, streamId });
+}
+
+export async function getGlobalEmbed(): Promise<GlobalEmbedDoc> {
+  return invoke("get_global_embed_cmd");
+}
+
+export async function saveGlobalEmbed(doc: GlobalEmbedDoc): Promise<void> {
+  return invoke("save_global_embed_cmd", { doc });
 }
 
 export async function getSnapshot(): Promise<Snapshot> {

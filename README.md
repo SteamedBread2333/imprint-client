@@ -6,14 +6,14 @@
 
 **imprint 后台运维控制台** · Tauri 桌面 · v0.1.0
 
-查看 Host / Shelves / Desk / Embed，启停栈，安装 embed sidecar。  
+查看 Host / Shelves / Desk、全局 Embed；可自动安装 imprint / Python / sidecar。  
 不是终端用户产品；审计规则请用 [imprint-desk-plugin](https://github.com/SteamedBread2333/imprint-desk-plugin)。
 
 </div>
 
 ## 开始
 
-需要 Rust、Node 20+、本机 [imprint](https://github.com/SteamedBread2333/imprint) CLI、Python 3.11+（embed）。
+需要 Rust、Node 20+、**git**（clone sidecar）、联网（首次准备运行环境）。
 
 ```bash
 git clone https://github.com/SteamedBread2333/imprint-client.git
@@ -22,7 +22,11 @@ npm install --legacy-peer-deps
 npm run tauri dev
 ```
 
-欢迎页选择含 `imprint.yaml` 的项目根；`imprint` 不在 PATH 时在 **设置** 填绝对路径。
+首次启动在弹窗中 **准备运行环境**；也可在 **设置 → 运行环境** 中安装或更新。  
+Embed 配置全局一份：`~/.imprint/embed.yaml`（项目 `imprint.yaml` **不含** `plugins.embed`）。  
+可选：选择含 `imprint.yaml` 的项目根以管理 Host / Shelves / Desk；不选项目也可启停 Embed。
+
+详见 [docs/runtime-releases.md](docs/runtime-releases.md)。
 
 ## 截图
 
@@ -57,14 +61,13 @@ GitHub Actions 打 macOS / Linux / Windows 安装包并发布 Release；发版�
 
 说明：
 
-- 安装包只含 **Imprint Console**；本机仍需自行安装 [imprint](https://github.com/SteamedBread2333/imprint) CLI，embed 还需 Python 3.11+ 与 sidecar。
+- **Release 仅含桌面控制台**。**imprint CLI** 使用 **go install 全局路径**（如 `~/go/bin/imprint`）；**Python 与 embed sidecar** 在应用数据目录。详见 [runtime-releases](docs/runtime-releases.md)（需 Go 与网络）。
 - **Linux** 构建目标为 **x86_64（amd64）**，不提供 arm64 Linux 包。
 - **macOS CI 产物未签名** 时，首次打开可能需在「系统设置 → 隐私与安全性」中允许，或右键 App → 打开。
-- `.tar.gz` 与 `.dmg` 同架构二选一；`.AppImage` 与 `.deb`/`.rpm` 同架构二选一。
 
 ## 常见问题
 
-**Embed `health check failed` / 4174 连不上** — 多为 **imprint 二进制过旧**（健康等待 ~8s，sidecar 首次 warm 常更久）。在 imprint 仓库 `go build -o imprint ./cmd/imprint`，设置页指向新二进制，再 `embed prepare` → `plugin start embed`。
+**Embed `health check failed`** — 更新运行环境中的 imprint，再 **embed prepare** → **plugin start embed**（全局配置，无需项目 cwd）。
 
 配置目录（macOS）：`~/Library/Application Support/com.imprint.client/config.json`
 
