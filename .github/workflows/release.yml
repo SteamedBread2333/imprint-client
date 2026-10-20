@@ -81,7 +81,7 @@ jobs:
             Pick the asset for your OS (`.dmg` / `.msi` / `.exe` / `.AppImage` or `.deb`, depending on what the build produced).
 
             ### Notes
-            - macOS builds are **unsigned** unless you configure Apple signing secrets in the repo; Gatekeeper may prompt on first open.
+            - macOS builds are **ad-hoc signed** (`signingIdentity: "-"`) so the app bundle seal is valid. They are not notarized unless Apple signing secrets are configured; Gatekeeper may still ask for approval on first open.
             - First launch can **install runtime** (imprint CLI, Python, embed sidecar) when online; embed config is global (`~/.imprint/embed.yaml`).
           releaseDraft: false
           prerelease: false

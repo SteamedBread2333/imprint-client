@@ -63,7 +63,7 @@ GitHub Actions 打 macOS / Linux / Windows 安装包并发布 Release；发版�
 
 - **Release 仅含桌面控制台**。**imprint CLI** 使用 **go install 全局路径**（如 `~/go/bin/imprint`）；**Python 与 embed sidecar** 在应用数据目录。详见 [runtime-releases](docs/runtime-releases.md)（需 Go 与网络）。
 - **Linux** 构建目标为 **x86_64（amd64）**，不提供 arm64 Linux 包。
-- **macOS CI 产物未签名** 时，首次打开可能需在「系统设置 → 隐私与安全性」中允许，或右键 App → 打开。
+- **macOS CI 产物为 ad-hoc 签名、未公证**。签名会封住 `.app` 里的资源和 `Info.plist`；未封住时 Gatekeeper 会把安装包判成「已损坏」。首次打开仍可能要在「系统设置 → 隐私与安全性」里允许。
 
 ## 常见问题
 
