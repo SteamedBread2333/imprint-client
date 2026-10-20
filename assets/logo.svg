@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Imprint Console">
+  <title>Imprint Console</title>
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#171c27" />
+      <stop offset="1" stop-color="#0a0c12" />
+    </linearGradient>
+    <linearGradient id="ridge" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#9cc4ff" />
+      <stop offset="0.45" stop-color="#6ea8fe" />
+      <stop offset="1" stop-color="#38e0d0" />
+    </linearGradient>
+    <linearGradient id="core" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#9ecbff" />
+      <stop offset="0.5" stop-color="#6ea8fe" />
+      <stop offset="1" stop-color="#40d9c8" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#6ea8fe" stop-opacity="0.22" />
+      <stop offset="1" stop-color="#6ea8fe" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <rect x="14" y="14" width="484" height="484" rx="116" fill="url(#plate)" />
+  <circle cx="256" cy="256" r="212" fill="url(#glow)" />
+
+  <g fill="none" stroke="url(#ridge)" stroke-linecap="round" opacity="0.95">
+      <path d="M 209.43 313.51 A 74 74 0 1 1 270.12 328.64" stroke-width="15" />
+      <path d="M 164.96 324.61 A 114 114 0 1 1 250.03 369.84" stroke-width="13" />
+      <path d="M 114.24 316.17 A 154 154 0 1 1 210.97 403.27" stroke-width="11" />
+      <path d="M 64.39 286.35 A 194 194 0 1 1 156.08 422.29" stroke-width="9.5" />
+  </g>
+
+  <!-- 内核：控制台提示符 -->
+  <rect x="214" y="214" width="84" height="84" rx="24" fill="url(#core)" />
+  <g fill="none" stroke="#0c0f16" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 234 231 L 250 256 L 234 281" />
+    <path d="M 262 281 L 286 281" />
+  </g>
+
+  <rect x="15" y="15" width="482" height="482" rx="115" fill="none" stroke="#6ea8fe" stroke-opacity="0.16" stroke-width="2" />
+</svg>
