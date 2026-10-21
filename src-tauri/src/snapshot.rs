@@ -98,7 +98,8 @@ fn host_url_from_listen(listen: &str) -> String {
 }
 
 fn apply_global_embed(snap: &mut Snapshot) {
-    let (doc, _) = global_embed::load().unwrap_or((global_embed::GlobalEmbedDoc::default(), String::new()));
+    let (doc, _) =
+        global_embed::load().unwrap_or((global_embed::GlobalEmbedDoc::default(), String::new()));
     let port = runtime::embed_port(&doc) as i64;
     snap.embed = PluginRow {
         id: "embed".into(),

@@ -205,11 +205,7 @@ fn push_path_lines(dirs: &mut Vec<PathBuf>, text: &str) {
 }
 
 fn go_env(key: &str) -> Option<String> {
-    let out = go_command()
-        .ok()?
-        .args(["env", key])
-        .output()
-        .ok()?;
+    let out = go_command().ok()?.args(["env", key]).output().ok()?;
     if !out.status.success() {
         return None;
     }
@@ -237,7 +233,9 @@ fn which_on_path(name: &str) -> Option<PathBuf> {
 }
 
 fn shell_escape(s: &str) -> String {
-    if s.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '/') {
+    if s.chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '/')
+    {
         s.to_string()
     } else {
         format!("'{}'", s.replace('\'', "'\\''"))
@@ -331,11 +329,8 @@ mod tests {
         }
         let saved = std::env::var_os("PATH");
         std::env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
-        let result = go_command().and_then(|mut cmd| {
-            cmd.arg("version")
-                .output()
-                .map_err(|e| e.to_string())
-        });
+        let result =
+            go_command().and_then(|mut cmd| cmd.arg("version").output().map_err(|e| e.to_string()));
         if let Some(saved) = &saved {
             std::env::set_var("PATH", saved);
         }

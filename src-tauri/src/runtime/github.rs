@@ -17,11 +17,7 @@ pub fn latest_imprint_release_tag() -> Result<String, String> {
 
 fn latest_tag_via_git() -> Result<String, String> {
     let out = Command::new("git")
-        .args([
-            "ls-remote",
-            "--tags",
-            IMPRINT_GIT_URL,
-        ])
+        .args(["ls-remote", "--tags", IMPRINT_GIT_URL])
         .output()
         .map_err(|e| format!("git ls-remote: {e}"))?;
     if !out.status.success() {
@@ -60,7 +56,9 @@ fn latest_tag_via_api() -> Result<String, String> {
         .build()
         .map_err(|e| e.to_string())?;
     let release: Value = client
-        .get(format!("https://api.github.com/repos/{IMPRINT_GITHUB}/releases/latest"))
+        .get(format!(
+            "https://api.github.com/repos/{IMPRINT_GITHUB}/releases/latest"
+        ))
         .header("Accept", "application/vnd.github+json")
         .send()
         .map_err(|e| e.to_string())?

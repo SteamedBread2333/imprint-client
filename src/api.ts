@@ -9,6 +9,7 @@ export interface AppConfig {
   hfEndpoint: string;
   imprintHfEndpoint: string;
   locale?: string;
+  recentProjects?: string[];
 }
 
 export interface RuntimeProbe {
@@ -78,7 +79,9 @@ export async function pickProjectFolder(): Promise<string | null> {
   return invoke<string | null>("pick_project_folder");
 }
 
-export async function openProject(path: string): Promise<{ projectRoot: string }> {
+export async function openProject(
+  path: string,
+): Promise<{ projectRoot: string; stoppedStack: boolean }> {
   return invoke("open_project", { path });
 }
 

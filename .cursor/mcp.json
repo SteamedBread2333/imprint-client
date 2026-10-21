@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "imprint": {
+      "command": "/Users/rzh/go/bin/imprint-mcp",
+      "args": ["--project", "${workspaceFolder}"]
+    }
+  }
+}

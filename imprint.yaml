@@ -1,0 +1,31 @@
+# Team convention — commit this file.
+# Paths in this file are relative to the repo root unless absolute.
+# Private runtime defaults to ~/.imprint/projects/<hash>/ (outside the repo).
+
+host:
+  listen: 127.0.0.1:9470
+
+telemetry:
+  enabled: true
+  retention_days: 30
+
+supersede:
+  inheritance_alpha: 0.20   # 0=copy old (no decay), 1=drop to 0.6 baseline
+
+shelves:
+  enabled: true
+  config:
+    roots:
+      - docs
+    # find_top_k: 2         # document hits; independent of find.top_k
+    # snippet_runes: 80     # query-window snippet cap
+    # max_chunk_lines: 12   # same-section flush; rebuild after change
+
+plugins:
+  desk:
+    enabled: true   # opt-in: clone imprint-desk-plugin, set enabled: true
+    package: ../imprint-desk-plugin
+    config:
+      port: 4173
+      hostUrl: http://127.0.0.1:9470
+# Embed (semantic dedup): ~/.imprint/embed.yaml — see docs/semantic-dedup.md

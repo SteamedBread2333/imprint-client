@@ -3,19 +3,18 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
 
-use reqwest::blocking::Client;
-use tauri::{AppHandle, Emitter};
 use super::github::latest_imprint_release_tag;
+use super::global_embed::{self, GlobalEmbedDoc};
 use super::manifest::RuntimeManifest;
 use super::paths::{
-    imprint_release_triple, managed_python_bin, python_dir, runtime_root, sidecar_dir,
-    SIDECAR_REPO,
+    imprint_release_triple, managed_python_bin, python_dir, runtime_root, sidecar_dir, SIDECAR_REPO,
 };
+use crate::config::{load_config, save_config};
 use crate::imprint_resolve::{
     find_go_installed_imprint, go_command, imprint_module_packages, imprint_supports_global_embed,
 };
-use crate::config::{load_config, save_config};
-use super::global_embed::{self, GlobalEmbedDoc};
+use reqwest::blocking::Client;
+use tauri::{AppHandle, Emitter};
 
 pub const PYTHON_RELEASE_TAG: &str = "20241016";
 pub const PYTHON_VERSION: &str = "3.12.7";
@@ -41,7 +40,11 @@ pub fn ensure_all(
     emit_line(app, stream_id, "runtime: checking embed sidecar…");
     ensure_sidecar(app, app_data, stream_id, &mut manifest)?;
 
-    emit_line(app, stream_id, "runtime: checking imprint CLI (go install / GOPATH/bin)…");
+    emit_line(
+        app,
+        stream_id,
+        "runtime: checking imprint CLI (go install / GOPATH/bin)…",
+    );
     ensure_imprint(app, stream_id, &mut manifest, false)?;
 
     emit_line(app, stream_id, "runtime: writing global embed.yaml…");
@@ -122,7 +125,13 @@ fn ensure_python(
         .user_agent("imprint-console")
         .build()
         .map_err(|e| e.to_string())?;
-    let bytes = client.get(&url).send().and_then(|r| r.error_for_status()).map_err(|e| e.to_string())?.bytes().map_err(|e| e.to_string())?;
+    let bytes = client
+        .get(&url)
+        .send()
+        .and_then(|r| r.error_for_status())
+        .map_err(|e| e.to_string())?
+        .bytes()
+        .map_err(|e| e.to_string())?;
     let dest = python_dir(app_data);
     fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
     let archive = dest.join(&filename);
@@ -135,7 +144,10 @@ fn ensure_python(
     normalize_python_tree(&staging, &dest)?;
     let _ = fs::remove_dir_all(&staging);
     if !bin.is_file() {
-        return Err(format!("python not found after extract at {}", bin.display()));
+        return Err(format!(
+            "python not found after extract at {}",
+            bin.display()
+        ));
     }
     manifest.python.version = PYTHON_VERSION.into();
     manifest.python.path = bin.to_string_lossy().into_owned();
@@ -207,7 +219,11 @@ fn ensure_sidecar(
 ) -> Result<(), String> {
     let dir = sidecar_dir(app_data);
     if !dir.join("scripts/setup.sh").is_file() {
-        emit_line(app, stream_id, &format!("runtime: git clone {SIDECAR_REPO}"));
+        emit_line(
+            app,
+            stream_id,
+            &format!("runtime: git clone {SIDECAR_REPO}"),
+        );
         if let Some(parent) = dir.parent() {
             fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
@@ -261,7 +277,11 @@ fn git_pull(dir: &Path, stream_id: &str, app: &tauri::AppHandle) -> Result<(), S
             .status()
             .map_err(|e| e.to_string())?;
         if !status.success() {
-            emit_line(app, stream_id, &format!("runtime: git {:?} failed (continuing)", args));
+            emit_line(
+                app,
+                stream_id,
+                &format!("runtime: git {:?} failed (continuing)", args),
+            );
         }
     }
     Ok(())
@@ -320,7 +340,11 @@ fn ensure_imprint(
         return Err("未找到 go 命令。请先安装 Go：https://go.dev/dl/".into());
     }
 
-    emit_line(app, stream_id, "runtime: resolving imprint release tag (display only)…");
+    emit_line(
+        app,
+        stream_id,
+        "runtime: resolving imprint release tag (display only)…",
+    );
     if let Ok(latest) = latest_imprint_release_tag() {
         manifest.imprint.latest_available = latest;
     }
@@ -357,10 +381,7 @@ fn ensure_imprint(
     emit_line(
         app,
         stream_id,
-        &format!(
-            "runtime: go install → {}",
-            bin_path.display()
-        ),
+        &format!("runtime: go install → {}", bin_path.display()),
     );
     Ok(())
 }
@@ -387,7 +408,13 @@ fn update_sidecar_manifest(app_data: &PathBuf, manifest: &mut RuntimeManifest) {
     let dir = sidecar_dir(app_data);
     manifest.sidecar.path = dir.to_string_lossy().into_owned();
     if let Ok(out) = Command::new("git")
-        .args(["-C", dir.to_str().unwrap_or(""), "rev-parse", "--short", "HEAD"])
+        .args([
+            "-C",
+            dir.to_str().unwrap_or(""),
+            "rev-parse",
+            "--short",
+            "HEAD",
+        ])
         .output()
     {
         if out.status.success() {

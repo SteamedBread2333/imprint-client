@@ -46,18 +46,59 @@ async fn pick_project_folder(app: AppHandle) -> Result<Option<String>, String> {
 #[serde(rename_all = "camelCase")]
 struct OpenProjectResult {
     project_root: String,
+    stopped_stack: bool,
+}
+
+fn normalize_project_path(path: &str) -> &str {
+    path.trim().trim_end_matches(['/', '\\'])
+}
+
+fn should_stop_previous_stack(current: &str, next: &str) -> bool {
+    let current = normalize_project_path(current);
+    let next = normalize_project_path(next);
+    !current.is_empty() && current != next
+}
+
+/// `imprint down` stops host and project plugins such as desk. Embed stays up.
+fn stop_previous_stack(cfg: &config::AppConfig, next_path: &str) -> Result<bool, String> {
+    if !should_stop_previous_stack(&cfg.project_root, next_path) {
+        return Ok(false);
+    }
+    let current = normalize_project_path(&cfg.project_root);
+    let snap = snapshot::fetch_snapshot(cfg);
+    let was_up = snap.host.listening || snap.desk.listening;
+    let (code, stdout, stderr) =
+        run_imprint_capture(cfg, std::path::Path::new(current), &["down"])?;
+    if code != 0 {
+        let stderr = stderr.trim();
+        let stdout = stdout.trim();
+        return Err(if !stderr.is_empty() {
+            stderr.to_string()
+        } else if !stdout.is_empty() {
+            stdout.to_string()
+        } else {
+            format!("imprint down exited with code {code}")
+        });
+    }
+    Ok(was_up)
 }
 
 #[tauri::command]
-fn open_project(app: AppHandle, path: String) -> Result<OpenProjectResult, String> {
-    let info = validate_project(&path)?;
-    let mut cfg = load_config(&app)?;
-    cfg.project_root = path.clone();
-    save_config(&app, &cfg)?;
-    let _info = info;
-    Ok(OpenProjectResult {
-        project_root: path,
+async fn open_project(app: AppHandle, path: String) -> Result<OpenProjectResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let info = validate_project(&path)?;
+        let mut cfg = load_config(&app)?;
+        let stopped_stack = stop_previous_stack(&cfg, &path)?;
+        config::remember_project(&mut cfg, &path);
+        save_config(&app, &cfg)?;
+        let _info = info;
+        Ok(OpenProjectResult {
+            project_root: path,
+            stopped_stack,
+        })
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -120,15 +161,7 @@ fn run_imprint_simple(
         PathBuf::from(&cfg.project_root)
     };
     let bin = config::effective_imprint_bin(&cfg);
-    let handle = spawn_streaming(
-        app.clone(),
-        stream_id.clone(),
-        cfg,
-        cwd,
-        bin,
-        args,
-        false,
-    )?;
+    let handle = spawn_streaming(app.clone(), stream_id.clone(), cfg, cwd, bin, args, false)?;
     *state.active_job.lock().map_err(|e| e.to_string())? = Some((stream_id, handle));
     Ok(())
 }
@@ -202,6 +235,7 @@ fn get_global_embed_cmd() -> Result<runtime::GlobalEmbedDoc, String> {
 
 #[tauri::command]
 fn save_global_embed_cmd(doc: runtime::GlobalEmbedDoc) -> Result<(), String> {
+    runtime::validate_global_embed(&doc)?;
     runtime::save_global_embed(&doc).map(|_| ())
 }
 
@@ -221,7 +255,8 @@ fn ensure_runtime(
     let handle = Arc::new(imprint::JobHandle {
         child: std::sync::Mutex::new(None),
     });
-    *state.active_job.lock().map_err(|e| e.to_string())? = Some((stream_id.clone(), handle.clone()));
+    *state.active_job.lock().map_err(|e| e.to_string())? =
+        Some((stream_id.clone(), handle.clone()));
     thread::spawn(move || {
         let result = runtime::ensure_all(&app2, &app_data, &sid);
         if result.is_ok() {
@@ -244,10 +279,7 @@ fn ensure_runtime(
                 }
             }
         }
-        let _ = app2.emit(
-            "job-finished",
-            serde_json::json!({ "streamId": sid }),
-        );
+        let _ = app2.emit("job-finished", serde_json::json!({ "streamId": sid }));
     });
     Ok(())
 }
@@ -290,10 +322,7 @@ fn update_runtime_component(
                 }
             }
         }
-        let _ = app2.emit(
-            "job-finished",
-            serde_json::json!({ "streamId": sid }),
-        );
+        let _ = app2.emit("job-finished", serde_json::json!({ "streamId": sid }));
     });
     Ok(())
 }
@@ -452,4 +481,17 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_stop_previous_stack;
+
+    #[test]
+    fn switch_stops_only_when_leaving_another_project() {
+        assert!(!should_stop_previous_stack("", "/work/b"));
+        assert!(!should_stop_previous_stack("/work/a", "/work/a"));
+        assert!(!should_stop_previous_stack("/work/a/", "/work/a"));
+        assert!(should_stop_previous_stack("/work/a", "/work/b"));
+    }
 }

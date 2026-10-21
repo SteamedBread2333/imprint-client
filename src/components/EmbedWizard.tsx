@@ -10,6 +10,7 @@ export function EmbedWizard({
   wizardSteps,
   logLines,
   busy,
+  embedStarting,
   onBack,
   onStep,
   onCancel,
@@ -22,6 +23,7 @@ export function EmbedWizard({
   wizardSteps: readonly string[];
   logLines: string[];
   busy: boolean;
+  embedStarting: boolean;
   onBack: () => void;
   onStep: (step: number) => void;
   onCancel: () => void;
@@ -38,7 +40,11 @@ export function EmbedWizard({
       {snap && (
         <p className="ok-text" style={{ marginTop: 0 }}>
           {m.embedStatus}:{" "}
-          {snap.embed.running || snap.embedHealth?.ok ? m.embedRunning : m.embedStopped}
+          {embedStarting && !(snap.embed.running || snap.embedHealth?.ok)
+            ? m.starting
+            : snap.embed.running || snap.embedHealth?.ok
+              ? m.embedRunning
+              : m.embedStopped}
           {snap.embedHealth?.ready ? " · ready" : snap.embedHealth?.ok ? " · /health OK" : ""}
         </p>
       )}

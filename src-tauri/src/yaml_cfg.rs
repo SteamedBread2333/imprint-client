@@ -63,7 +63,11 @@ pub fn parse_project_yaml(project_root: &str) -> Result<ProjectYamlInfo, String>
         .and_then(|h| h.listen)
         .unwrap_or_else(|| "127.0.0.1:9470".into());
 
-    let shelves_enabled = doc.shelves.as_ref().and_then(|s| s.enabled).unwrap_or(false);
+    let shelves_enabled = doc
+        .shelves
+        .as_ref()
+        .and_then(|s| s.enabled)
+        .unwrap_or(false);
     let shelves_roots = doc
         .shelves
         .as_ref()

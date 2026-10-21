@@ -18,7 +18,11 @@ impl TailHandle {
     }
 }
 
-pub fn tail_file(app: AppHandle, stream_id: String, path: String) -> Result<Arc<TailHandle>, String> {
+pub fn tail_file(
+    app: AppHandle,
+    stream_id: String,
+    path: String,
+) -> Result<Arc<TailHandle>, String> {
     if path.trim().is_empty() {
         return Err("log path is empty".into());
     }

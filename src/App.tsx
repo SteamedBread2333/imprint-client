@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AppConfig,
   Snapshot,
@@ -36,6 +36,30 @@ import "./App.css";
 type Page = "dashboard" | "settings";
 
 const LOG_STREAM = "main-log";
+const START_WAIT_MS = 20_000;
+
+type StartMark = { at: number; settled: boolean } | null;
+type StartWatch = { host: StartMark; desk: StartMark; embed: StartMark };
+
+function armStart(): StartMark {
+  return { at: Date.now(), settled: false };
+}
+type ServicePhase = "running" | "stopped" | "starting";
+
+function servicePhase(up: boolean, pending: boolean): ServicePhase {
+  if (up) return "running";
+  if (pending) return "starting";
+  return "stopped";
+}
+
+function projectOptionLabel(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  const name = parts[parts.length - 1] ?? path;
+  if (parts.length < 2) return path;
+  const parent = normalized.slice(0, normalized.length - name.length).replace(/\/$/, "");
+  return `${name} — ${parent}`;
+}
 
 function localeFromCfg(cfg: AppConfig | null): Locale {
   return cfg?.locale === "en" ? "en" : "zh";
@@ -54,6 +78,16 @@ export default function App() {
   const [prereq, setPrereq] = useState("");
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null);
   const [bootDismissed, setBootDismissed] = useState(false);
+  const [switchingProject, setSwitchingProject] = useState(false);
+  const [startWatch, setStartWatch] = useState<StartWatch>({
+    host: null,
+    desk: null,
+    embed: null,
+  });
+  const busyRef = useRef(false);
+  const startWatchRef = useRef(startWatch);
+  busyRef.current = busy;
+  startWatchRef.current = startWatch;
   const locale = localeFromCfg(cfg);
   const m = useMemo(() => t(locale), [locale]);
   const appName = APP_NAME[locale];
@@ -115,6 +149,64 @@ export default function App() {
   }, [cfg, cfg?.projectRoot, cfg?.pollIntervalMs, refresh]);
 
   useEffect(() => {
+    if (!snap) return;
+    const embedUp = snap.embed.running || snap.embedHealth?.ok === true;
+    setStartWatch((prev) => {
+      const next: StartWatch = {
+        host: prev.host != null && snap.host.listening ? null : prev.host,
+        desk: prev.desk != null && snap.desk.listening ? null : prev.desk,
+        embed: prev.embed != null && embedUp ? null : prev.embed,
+      };
+      if (next.host === prev.host && next.desk === prev.desk && next.embed === prev.embed) {
+        return prev;
+      }
+      return next;
+    });
+  }, [snap]);
+
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (wasBusy.current && !busy) {
+      const now = Date.now();
+      const settle = (mark: StartMark): StartMark =>
+        mark == null ? null : { at: now, settled: true };
+      setStartWatch((prev) => ({
+        host: settle(prev.host),
+        desk: settle(prev.desk),
+        embed: settle(prev.embed),
+      }));
+    }
+    wasBusy.current = busy;
+  }, [busy]);
+
+  const startUnconfirmed = m.startUnconfirmed;
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (busyRef.current) return;
+      const prev = startWatchRef.current;
+      const now = Date.now();
+      const expired: string[] = [];
+      const take = (mark: StartMark, name: string) => {
+        if (mark != null && mark.settled && now - mark.at > START_WAIT_MS) {
+          expired.push(name);
+          return null;
+        }
+        return mark;
+      };
+      const next = {
+        host: take(prev.host, "Host"),
+        desk: take(prev.desk, "Desk"),
+        embed: take(prev.embed, "Embed"),
+      };
+      if (expired.length === 0) return;
+      startWatchRef.current = next;
+      setStartWatch(next);
+      setNotice(`${startUnconfirmed}: ${expired.join("、")}`);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [startUnconfirmed]);
+
+  useEffect(() => {
     let unlistenOut: (() => void) | undefined;
     let unlistenDone: (() => void) | undefined;
     subscribeJobOutput((p) => {
@@ -174,20 +266,30 @@ export default function App() {
     }
   };
 
-  const onPickProject = async () => {
+  const openProjectPath = async (path: string) => {
+    if (switchingProject) return;
+    setSwitchingProject(true);
     setError("");
-    const picked = await pickProjectFolder();
-    if (!picked) return;
+    setNotice("");
     try {
-      await openProject(picked);
+      const opened = await openProject(path);
       const c = await getConfig();
       setCfg(c);
       setPage("dashboard");
       setShowEmbedWizard(false);
+      if (opened.stoppedStack) setNotice(m.stoppedPreviousStack);
       await refresh();
     } catch (e) {
       setError(String(e));
+    } finally {
+      setSwitchingProject(false);
     }
+  };
+
+  const onPickProject = async () => {
+    const picked = await pickProjectFolder();
+    if (!picked) return;
+    await openProjectPath(picked);
   };
 
   const setLocale = async (next: Locale) => {
@@ -211,19 +313,30 @@ export default function App() {
     try {
       await releaseActiveJob().catch(() => false);
       await fn();
+      return true;
     } catch (e) {
       setBusy(false);
       setError(String(e));
+      return false;
     }
   };
 
   const stackUpDown = async (up: boolean) => {
     setBusy(true);
     setError("");
+    if (up) {
+      const mark = armStart();
+      setStartWatch((prev) => ({
+        ...prev,
+        host: snap?.host.listening ? null : mark,
+        desk: snap?.desk.listening ? null : mark,
+      }));
+    }
     try {
       await imprintUpDown(up);
       await refresh();
     } catch (e) {
+      if (up) setStartWatch((prev) => ({ ...prev, host: null, desk: null }));
       setError(String(e));
     } finally {
       setBusy(false);
@@ -262,9 +375,11 @@ export default function App() {
         }
         return;
       }
-      await runJob(async () => {
+      setStartWatch((prev) => ({ ...prev, embed: armStart() }));
+      const started = await runJob(async () => {
         await runImprint(LOG_STREAM, ["plugin", "start", "embed"]);
       });
+      if (!started) setStartWatch((prev) => ({ ...prev, embed: null }));
     }
   };
 
@@ -283,6 +398,13 @@ export default function App() {
       </div>
     );
   }
+
+  const recentProjects = [
+    ...new Set([
+      ...(cfg.projectRoot ? [cfg.projectRoot] : []),
+      ...(cfg.recentProjects ?? []),
+    ]),
+  ];
 
   return (
     <div className="app-frame">
@@ -343,6 +465,25 @@ export default function App() {
       <main className="main">
         <div className="project-bar">
           <div className="project-bar-label">{m.currentProject}</div>
+          {recentProjects.length > 0 && (
+            <select
+              className="project-select mono"
+              value={cfg.projectRoot}
+              aria-label={m.recentPlaceholder}
+              disabled={switchingProject}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (next && next !== cfg.projectRoot) void openProjectPath(next);
+              }}
+            >
+              {!cfg.projectRoot && <option value="">{m.recentPlaceholder}</option>}
+              {recentProjects.map((path) => (
+                <option key={path} value={path} title={path}>
+                  {projectOptionLabel(path)}
+                </option>
+              ))}
+            </select>
+          )}
           <div className="project-bar-path mono" title={cfg.projectRoot || m.projectOptional}>
             {cfg.projectRoot || m.projectOptional}
           </div>
@@ -352,8 +493,8 @@ export default function App() {
                 {m.openInFinder}
               </button>
             )}
-            <button type="button" className="btn ghost small" onClick={onPickProject}>
-              {cfg.projectRoot ? m.switchProject : m.pickProject}
+            <button type="button" className="btn ghost small" disabled={switchingProject} onClick={onPickProject}>
+              {recentProjects.length > 0 ? m.pickAnother : m.pickProject}
             </button>
           </div>
         </div>
@@ -377,7 +518,13 @@ export default function App() {
             busy={busy}
             onBack={() => setShowEmbedWizard(false)}
             onStep={runWizardStep}
-            onCancel={() => cancelActiveJob().then(() => setBusy(false))}
+            embedStarting={startWatch.embed != null}
+            onCancel={() =>
+              cancelActiveJob().then(() => {
+                setBusy(false);
+                setStartWatch((prev) => ({ ...prev, embed: null }));
+              })
+            }
             onClearLogs={() => setLogLines([])}
           />
         )}
@@ -392,7 +539,15 @@ export default function App() {
             embedReady={embedReady}
             onRefresh={refresh}
             onStack={stackUpDown}
-            onCancelJob={() => cancelActiveJob().then(() => setBusy(false))}
+            pendingHost={startWatch.host != null}
+            pendingDesk={startWatch.desk != null}
+            pendingEmbed={startWatch.embed != null}
+            onCancelJob={() =>
+              cancelActiveJob().then(() => {
+                setBusy(false);
+                setStartWatch((prev) => ({ ...prev, embed: null }));
+              })
+            }
             onOpenDesk={() => openExternalUrl(snap.deskUrl)}
             onRevealVault={() => onRevealPath(snap.vault)}
             onOpenEmbedWizard={() => setShowEmbedWizard(true)}
@@ -403,7 +558,9 @@ export default function App() {
                 await refresh();
                 return;
               }
-              runJob(() => runImprint(LOG_STREAM, ["plugin", "start", "embed"]));
+              setStartWatch((prev) => ({ ...prev, embed: armStart() }));
+              const started = await runJob(() => runImprint(LOG_STREAM, ["plugin", "start", "embed"]));
+              if (!started) setStartWatch((prev) => ({ ...prev, embed: null }));
             }}
             onEmbedStop={() =>
               runJob(async () => {
@@ -427,6 +584,10 @@ export default function App() {
               runJob(() => updateRuntimeComponent(name, LOG_STREAM));
             }}
             onSave={(c) => saveConfig(c).then(() => setCfg(c))}
+            onEmbedSaved={(msg) => {
+              setError("");
+              setNotice(msg);
+            }}
             onRefreshRuntime={refreshRuntime}
             runtimeLogLines={logLines}
           />
@@ -446,6 +607,9 @@ function Dashboard({
   embedReady,
   onRefresh,
   onStack,
+  pendingHost,
+  pendingDesk,
+  pendingEmbed,
   onCancelJob,
   onOpenDesk,
   onRevealVault,
@@ -461,6 +625,9 @@ function Dashboard({
   embedReady: boolean;
   onRefresh: () => void;
   onStack: (up: boolean) => void;
+  pendingHost: boolean;
+  pendingDesk: boolean;
+  pendingEmbed: boolean;
   onCancelJob: () => void;
   onOpenDesk: () => void;
   onRevealVault: () => void;
@@ -469,8 +636,10 @@ function Dashboard({
   onEmbedStop: () => void;
 }) {
   const embedUp = snap.embed.running || snap.embedHealth?.ok === true;
+  const embedPhase = servicePhase(embedUp, pendingEmbed);
   const runLabel = m.running;
   const stopLabel = m.stopped;
+  const waitLabel = m.starting;
 
   return (
     <section className="panel">
@@ -498,23 +667,26 @@ function Dashboard({
           <ServiceCard
             title={m.embed}
             port={snap.embed.port}
-            listening={embedUp}
+            phase={embedPhase}
             runLabel={runLabel}
             stopLabel={stopLabel}
+            waitLabel={waitLabel}
             extra={
-              embedReady
-                ? m.embedReady
-                : snap.embedHealth?.ok
-                  ? m.embedUpNotReady
-                  : snap.embed.running
-                    ? m.embedUpWait
-                    : snap.embed.error || m.embedDown
+              embedPhase === "starting"
+                ? m.starting
+                : embedReady
+                  ? m.embedReady
+                  : snap.embedHealth?.ok
+                    ? m.embedUpNotReady
+                    : snap.embed.running
+                      ? m.embedUpWait
+                      : snap.embed.error || m.embedDown
             }
             pills={
               <>
                 {snap.embed.healthy && <StatusPill label="healthy" tone="ok" />}
                 {embedReady && <StatusPill label="ready" tone="ok" />}
-                {!embedUp && <StatusPill label={stopLabel} tone="off" />}
+                {embedPhase === "stopped" && <StatusPill label={stopLabel} tone="off" />}
               </>
             }
             actions={
@@ -545,9 +717,10 @@ function Dashboard({
           <ServiceCard
             title={m.host}
             port={snap.host.port}
-            listening={snap.host.listening}
+            phase={servicePhase(snap.host.listening, pendingHost)}
             runLabel={runLabel}
             stopLabel={stopLabel}
+            waitLabel={waitLabel}
             extra={`${m.rules} ${snap.host.rules ?? 0}`}
             actions={
               <>
@@ -563,9 +736,10 @@ function Dashboard({
           <ServiceCard
             title={m.shelves}
             port={0}
-            listening={snap.shelves.indexed}
+            phase={servicePhase(snap.shelves.indexed, false)}
             runLabel={runLabel}
             stopLabel={stopLabel}
+            waitLabel={waitLabel}
             extra={
               snap.shelves.enabled
                 ? `indexed: ${snap.shelves.indexed ? m.indexedYes : m.indexedNo} · roots: ${(snap.shelves.roots ?? []).join(", ") || "—"}`
@@ -576,9 +750,10 @@ function Dashboard({
           <ServiceCard
             title={m.desk}
             port={snap.desk.port}
-            listening={snap.desk.listening}
+            phase={servicePhase(snap.desk.listening, pendingDesk)}
             runLabel={runLabel}
             stopLabel={stopLabel}
+            waitLabel={waitLabel}
             extra={hostUp ? snap.deskUrl : m.deskNeedHost}
             actions={
               <button type="button" className="btn" disabled={!hostUp} onClick={onOpenDesk}>
@@ -605,34 +780,136 @@ function Dashboard({
 function ServiceCard({
   title,
   port,
-  listening,
+  phase,
   extra,
   actions,
   pills,
   runLabel,
   stopLabel,
+  waitLabel,
 }: {
   title: string;
   port: number;
-  listening: boolean;
+  phase: ServicePhase;
   extra: string;
   actions: ReactNode;
   pills?: ReactNode;
   runLabel: string;
   stopLabel: string;
+  waitLabel: string;
 }) {
+  const label = phase === "running" ? runLabel : phase === "starting" ? waitLabel : stopLabel;
+  const tone = phase === "running" ? "ok" : phase === "starting" ? "warn" : "off";
   return (
     <div className="card">
       <div className="card-top">
         <h3>{title}</h3>
         {port > 0 && <span className="muted">:{port}</span>}
-        <StatusPill label={listening ? runLabel : stopLabel} tone={listening ? "ok" : "off"} />
+        <StatusPill label={label} tone={tone} />
         {pills}
       </div>
       <p className="card-extra">{extra}</p>
       <div className="card-actions">{actions}</div>
     </div>
   );
+}
+
+type EmbedForm = {
+  enabled: boolean;
+  package: string;
+  port: string;
+  model: string;
+  duplicateThreshold: string;
+  relateContradictionMin: string;
+  relateEntailmentMin: string;
+  relateBidirectional: boolean;
+  timeoutSeconds: string;
+};
+
+const EMBED_DEFAULTS = {
+  port: 4174,
+  model: "BAAI/bge-small-zh-v1.5",
+  duplicateThreshold: 0.65,
+  relateContradictionMin: 0.4,
+  relateEntailmentMin: 0.35,
+  relateBidirectional: true,
+  timeoutSeconds: 5,
+};
+
+function numField(v: unknown, fallback: number): string {
+  let n: number | null = null;
+  if (typeof v === "number" && Number.isFinite(v)) n = v;
+  else if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) n = Number(v);
+  if (n == null) return String(fallback);
+  if (Number.isInteger(n)) return String(n);
+  return String(Math.round(n * 1000) / 1000);
+}
+
+function embedFormFromDoc(doc: GlobalEmbedDoc): EmbedForm {
+  const c = doc.config ?? {};
+  const bidirectional = c.relate_bidirectional;
+  return {
+    enabled: doc.enabled,
+    package: doc.package,
+    port: numField(c.port, EMBED_DEFAULTS.port),
+    model: typeof c.model === "string" && c.model.trim() ? c.model : EMBED_DEFAULTS.model,
+    duplicateThreshold: numField(c.duplicate_threshold, EMBED_DEFAULTS.duplicateThreshold),
+    relateContradictionMin: numField(c.relate_contradiction_min, EMBED_DEFAULTS.relateContradictionMin),
+    relateEntailmentMin: numField(c.relate_entailment_min, EMBED_DEFAULTS.relateEntailmentMin),
+    relateBidirectional:
+      typeof bidirectional === "boolean" ? bidirectional : EMBED_DEFAULTS.relateBidirectional,
+    timeoutSeconds: numField(c.timeout_seconds, EMBED_DEFAULTS.timeoutSeconds),
+  };
+}
+
+function parseIntInRange(raw: string, min: number, max: number): number | null {
+  const text = raw.trim();
+  if (!/^\d+$/.test(text)) return null;
+  const n = Number(text);
+  if (!Number.isInteger(n) || n < min || n > max) return null;
+  return n;
+}
+
+function parseUnitInterval(raw: string): number | null {
+  const text = raw.trim();
+  if (text === "") return null;
+  const n = Number(text);
+  if (!Number.isFinite(n) || n < 0 || n > 1) return null;
+  return n;
+}
+
+type EmbedFieldError = "port" | "model" | "threshold" | "timeout";
+
+function embedFormError(form: EmbedForm): EmbedFieldError | null {
+  if (parseIntInRange(form.port, 1, 65535) == null) return "port";
+  if (!form.model.trim()) return "model";
+  if (
+    parseUnitInterval(form.duplicateThreshold) == null ||
+    parseUnitInterval(form.relateContradictionMin) == null ||
+    parseUnitInterval(form.relateEntailmentMin) == null
+  ) {
+    return "threshold";
+  }
+  if (parseIntInRange(form.timeoutSeconds, 1, 3600) == null) return "timeout";
+  return null;
+}
+
+function embedDocFromForm(base: GlobalEmbedDoc, form: EmbedForm): GlobalEmbedDoc {
+  return {
+    ...base,
+    enabled: form.enabled,
+    package: base.package,
+    config: {
+      ...base.config,
+      port: parseIntInRange(form.port, 1, 65535),
+      model: form.model.trim(),
+      duplicate_threshold: parseUnitInterval(form.duplicateThreshold),
+      relate_contradiction_min: parseUnitInterval(form.relateContradictionMin),
+      relate_entailment_min: parseUnitInterval(form.relateEntailmentMin),
+      relate_bidirectional: form.relateBidirectional,
+      timeout_seconds: parseIntInRange(form.timeoutSeconds, 1, 3600),
+    },
+  };
 }
 
 function Settings({
@@ -645,6 +922,7 @@ function Settings({
   onUpdateComponent,
   onSave,
   onRefreshRuntime,
+  onEmbedSaved,
   runtimeLogLines,
 }: {
   m: ReturnType<typeof t>;
@@ -656,14 +934,58 @@ function Settings({
   onUpdateComponent: (name: string) => void;
   onSave: (c: AppConfig) => Promise<void>;
   onRefreshRuntime: () => void;
+  onEmbedSaved: (message: string) => void;
   runtimeLogLines: string[];
 }) {
   const [draft, setDraft] = useState(cfg);
   const [embedDoc, setEmbedDoc] = useState<GlobalEmbedDoc | null>(null);
+  const [embedForm, setEmbedForm] = useState<EmbedForm | null>(null);
+  const [embedError, setEmbedError] = useState("");
   useEffect(() => setDraft(cfg), [cfg]);
   useEffect(() => {
-    getGlobalEmbed().then(setEmbedDoc).catch(() => {});
+    let cancelled = false;
+    getGlobalEmbed()
+      .then((doc) => {
+        if (cancelled) return;
+        setEmbedDoc(doc);
+        setEmbedForm(embedFormFromDoc(doc));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [runtimeStatus?.ready]);
+
+  const saveEmbed = async () => {
+    if (!embedForm || !embedDoc) return;
+    const invalid = embedFormError(embedForm);
+    if (invalid === "port") {
+      setEmbedError(m.embedInvalidPort);
+      return;
+    }
+    if (invalid === "model") {
+      setEmbedError(m.embedInvalidModel);
+      return;
+    }
+    if (invalid === "threshold") {
+      setEmbedError(m.embedInvalidThreshold);
+      return;
+    }
+    if (invalid === "timeout") {
+      setEmbedError(m.embedInvalidTimeout);
+      return;
+    }
+    try {
+      const next = embedDocFromForm(embedDoc, embedForm);
+      await saveGlobalEmbed(next);
+      setEmbedDoc(next);
+      setEmbedError("");
+      onEmbedSaved(m.embedSaved);
+      onRefreshRuntime();
+    } catch (e) {
+      setEmbedError(String(e));
+    }
+  };
 
   return (
     <section className="panel">
@@ -712,25 +1034,110 @@ function Settings({
       </ul>
       <h3>{m.globalEmbedTitle}</h3>
       <p className="muted">{m.globalEmbedHint}</p>
-      {embedDoc && (
+      {embedForm && (
         <>
-          <label className="field">
+          <label className="field check">
             <input
               type="checkbox"
-              checked={embedDoc.enabled}
-              onChange={(e) => setEmbedDoc({ ...embedDoc, enabled: e.target.checked })}
+              checked={embedForm.enabled}
+              onChange={(e) => setEmbedForm({ ...embedForm, enabled: e.target.checked })}
             />{" "}
             {m.globalEmbedEnabled}
           </label>
           <label className="field">
             package
-            <input value={embedDoc.package} readOnly className="mono" />
+            <input value={embedForm.package} readOnly className="mono" />
           </label>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => saveGlobalEmbed(embedDoc).then(onRefreshRuntime)}
-          >
+          <div className="field-grid">
+            <label className="field">
+              {m.embedPort}
+              <span className="field-hint">port</span>
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                step={1}
+                value={embedForm.port}
+                onChange={(e) => setEmbedForm({ ...embedForm, port: e.target.value })}
+              />
+            </label>
+            <label className="field">
+              {m.embedTimeout}
+              <span className="field-hint">timeout_seconds</span>
+              <input
+                type="number"
+                min={1}
+                max={3600}
+                step={1}
+                value={embedForm.timeoutSeconds}
+                onChange={(e) => setEmbedForm({ ...embedForm, timeoutSeconds: e.target.value })}
+              />
+            </label>
+            <label className="field">
+              {m.embedDuplicate}
+              <span className="field-hint">duplicate_threshold</span>
+              <input
+                type="number"
+                min={0}
+                max={1}
+                step={0.01}
+                value={embedForm.duplicateThreshold}
+                onChange={(e) => setEmbedForm({ ...embedForm, duplicateThreshold: e.target.value })}
+              />
+            </label>
+            <label className="field">
+              {m.embedContradiction}
+              <span className="field-hint">relate_contradiction_min</span>
+              <input
+                type="number"
+                min={0}
+                max={1}
+                step={0.01}
+                value={embedForm.relateContradictionMin}
+                onChange={(e) =>
+                  setEmbedForm({ ...embedForm, relateContradictionMin: e.target.value })
+                }
+              />
+            </label>
+            <label className="field">
+              {m.embedEntailment}
+              <span className="field-hint">relate_entailment_min</span>
+              <input
+                type="number"
+                min={0}
+                max={1}
+                step={0.01}
+                value={embedForm.relateEntailmentMin}
+                onChange={(e) =>
+                  setEmbedForm({ ...embedForm, relateEntailmentMin: e.target.value })
+                }
+              />
+            </label>
+          </div>
+          <label className="field">
+            {m.embedModel}
+            <span className="field-hint">model</span>
+            <input
+              value={embedForm.model}
+              className="mono"
+              onChange={(e) => setEmbedForm({ ...embedForm, model: e.target.value })}
+            />
+          </label>
+          <label className="field check">
+            <input
+              type="checkbox"
+              checked={embedForm.relateBidirectional}
+              onChange={(e) =>
+                setEmbedForm({ ...embedForm, relateBidirectional: e.target.checked })
+              }
+            />
+            <span>
+              {m.embedBidirectional}
+              <span className="field-hint">relate_bidirectional</span>
+            </span>
+          </label>
+          {embedError && <div className="error-bar">{embedError}</div>}
+          <button type="button" className="btn" onClick={() => void saveEmbed()}>
             {m.save}
           </button>
         </>

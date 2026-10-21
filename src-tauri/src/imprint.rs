@@ -31,11 +31,16 @@ pub fn run_imprint_capture(
     args: &[&str],
 ) -> Result<(i32, String, String), String> {
     let mut cmd = Command::new(config::effective_imprint_bin(cfg));
-    cmd.args(args).current_dir(cwd).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.args(args)
+        .current_dir(cwd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     for (k, v) in extra_env(cfg) {
         cmd.env(k, v);
     }
-    let out = cmd.output().map_err(|e| format!("failed to run imprint: {e}"))?;
+    let out = cmd
+        .output()
+        .map_err(|e| format!("failed to run imprint: {e}"))?;
     let code = out.status.code().unwrap_or(-1);
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
@@ -109,43 +114,43 @@ pub fn spawn_streaming(
     }
     let h2 = handle.clone();
     let app3 = app.clone();
-    thread::spawn(move || {
-        loop {
-            let finished = {
-                let mut guard = match h2.child.lock() {
-                    Ok(g) => g,
-                    Err(_) => break,
-                };
-                match guard.as_mut() {
-                    Some(child) => child.try_wait().ok().flatten().is_some(),
-                    None => true,
-                }
+    thread::spawn(move || loop {
+        let finished = {
+            let mut guard = match h2.child.lock() {
+                Ok(g) => g,
+                Err(_) => break,
             };
-            if finished {
-                if let Some(state) = app3.try_state::<AppState>() {
-                    if let Ok(mut guard) = state.active_job.lock() {
-                        let ours = guard
-                            .as_ref()
-                            .map(|(sid, _)| sid == &stream_id)
-                            .unwrap_or(false);
-                        if ours {
-                            *guard = None;
-                        }
+            match guard.as_mut() {
+                Some(child) => child.try_wait().ok().flatten().is_some(),
+                None => true,
+            }
+        };
+        if finished {
+            if let Some(state) = app3.try_state::<AppState>() {
+                if let Ok(mut guard) = state.active_job.lock() {
+                    let ours = guard
+                        .as_ref()
+                        .map(|(sid, _)| sid == &stream_id)
+                        .unwrap_or(false);
+                    if ours {
+                        *guard = None;
                     }
                 }
-                let _ = app3.emit(
-                    "job-finished",
-                    serde_json::json!({ "streamId": stream_id }),
-                );
-                break;
             }
-            thread::sleep(std::time::Duration::from_millis(200));
+            let _ = app3.emit("job-finished", serde_json::json!({ "streamId": stream_id }));
+            break;
         }
+        thread::sleep(std::time::Duration::from_millis(200));
     });
     Ok(handle)
 }
 
-fn stream_reader(app: AppHandle, stream_id: String, pipe: impl std::io::Read + Send + 'static, kind: &'static str) {
+fn stream_reader(
+    app: AppHandle,
+    stream_id: String,
+    pipe: impl std::io::Read + Send + 'static,
+    kind: &'static str,
+) {
     let reader = BufReader::new(pipe);
     for line in reader.lines() {
         match line {

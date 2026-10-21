@@ -156,6 +156,17 @@ body {
   margin-bottom: 0.65rem;
 }
 
+.project-select {
+  width: 100%;
+  margin-bottom: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #0e1016;
+  color: #fff;
+  font-size: 13px;
+}
+
 .project-bar-actions {
   display: flex;
   flex-wrap: wrap;
@@ -408,12 +419,36 @@ body {
   max-width: 480px;
 }
 
-.field input {
+.field input,
+.field select {
   padding: 0.5rem 0.65rem;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: #0e1016;
   color: #fff;
+}
+
+.field.check {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.field.check input {
+  width: auto;
+  padding: 0;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1rem;
+  max-width: 640px;
+}
+
+.field-grid .field {
+  max-width: none;
 }
 
 .log-panel {

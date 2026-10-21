@@ -42,7 +42,10 @@ pub fn get_runtime_status(app_data: &PathBuf, cfg: &AppConfig) -> RuntimeStatus 
         .unwrap_or_else(|| {
             imprint_resolve::go_bin_dirs()
                 .ok()
-                .and_then(|dirs| dirs.first().map(|d| d.join("imprint").to_string_lossy().into_owned()))
+                .and_then(|dirs| {
+                    dirs.first()
+                        .map(|d| d.join("imprint").to_string_lossy().into_owned())
+                })
                 .unwrap_or_else(|| manifest.imprint.path.clone())
         });
     let imprint_latest = manifest.imprint.latest_available.clone();
