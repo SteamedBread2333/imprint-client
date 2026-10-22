@@ -39,14 +39,6 @@ Embed 配置全局一份：`~/.imprint/embed.yaml`（项目 `imprint.yaml` **不
 
 更新 UI 后：`npm run screenshots`
 
-## 发版
-
-```bash
-git tag v0.1.0 && git push origin v0.1.0
-```
-
-GitHub Actions 打 macOS / Linux / Windows 安装包并发布 Release；发版时改文首 **v0.1.0** 即可。
-
 ## 下载哪个包？
 
 在 [Releases](https://github.com/SteamedBread2333/imprint-client/releases) 按系统选 **一个** 即可（文件名里的 `0.1.0` 随版本变化）。
