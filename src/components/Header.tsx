@@ -1,3 +1,4 @@
+import { Group, Text } from "@mantine/core";
 import { LocaleToggle } from "./LocaleToggle";
 import type { Locale, t } from "../i18n";
 
@@ -11,12 +12,18 @@ type Props = {
 
 export function Header({ title, subtitle, locale, onLocale, m }: Props) {
   return (
-    <header className="app-header">
-      <div className="app-header-brand">
-        <span className="app-header-title">{title}</span>
-        {subtitle && <span className="app-header-sub">{subtitle}</span>}
+    <Group h="100%" px="md" justify="space-between" wrap="nowrap">
+      <div>
+        <Text fw={600} size="sm">
+          {title}
+        </Text>
+        {subtitle && (
+          <Text size="xs" c="dimmed">
+            {subtitle}
+          </Text>
+        )}
       </div>
       <LocaleToggle locale={locale} onChange={onLocale} m={m} />
-    </header>
+    </Group>
   );
 }

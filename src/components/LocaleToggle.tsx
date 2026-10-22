@@ -1,3 +1,4 @@
+import { SegmentedControl } from "@mantine/core";
 import type { Locale, t } from "../i18n";
 
 type Props = {
@@ -8,21 +9,14 @@ type Props = {
 
 export function LocaleToggle({ locale, onChange, m }: Props) {
   return (
-    <div className="locale-toggle">
-      <button
-        type="button"
-        className={locale === "zh" ? "btn small active-lang" : "btn ghost small"}
-        onClick={() => onChange("zh")}
-      >
-        {m.langZh}
-      </button>
-      <button
-        type="button"
-        className={locale === "en" ? "btn small active-lang" : "btn ghost small"}
-        onClick={() => onChange("en")}
-      >
-        {m.langEn}
-      </button>
-    </div>
+    <SegmentedControl
+      size="xs"
+      value={locale}
+      onChange={(value) => onChange(value as Locale)}
+      data={[
+        { label: m.langZh, value: "zh" },
+        { label: m.langEn, value: "en" },
+      ]}
+    />
   );
 }

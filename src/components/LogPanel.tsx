@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Button, Checkbox, Group, Paper, Text } from "@mantine/core";
 
 export function LogPanel({
   lines,
@@ -25,26 +26,28 @@ export function LogPanel({
   }, [lines, stick]);
 
   return (
-    <div className="log-panel">
-      <div className="log-toolbar">
-        <span>{title}</span>
-        <div>
-          <label className="log-stick">
-            <input
-              type="checkbox"
-              checked={stick}
-              onChange={(e) => setStick(e.target.checked)}
-            />
-            {autoScrollLabel}
-          </label>
-          <button type="button" className="btn ghost" onClick={onClear}>
+    <Paper withBorder radius="md" p="sm">
+      <Group justify="space-between" mb="xs">
+        <Text size="sm" fw={600}>
+          {title}
+        </Text>
+        <Group gap="sm">
+          <Checkbox
+            size="xs"
+            label={autoScrollLabel}
+            checked={stick}
+            onChange={(e) => setStick(e.currentTarget.checked)}
+          />
+          <Button size="xs" variant="subtle" onClick={onClear}>
             {clearLabel}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </Group>
+      </Group>
       <pre className="log-body">
         {lines.length === 0 ? (
-          <span className="muted">{emptyLabel}</span>
+          <Text span size="xs" c="dimmed">
+            {emptyLabel}
+          </Text>
         ) : (
           lines.map((line, i) => (
             <div key={i} className={logClass(line)}>
@@ -54,7 +57,7 @@ export function LogPanel({
         )}
         <div ref={bottom} />
       </pre>
-    </div>
+    </Paper>
   );
 }
 

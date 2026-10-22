@@ -1,3 +1,4 @@
+import { Button, Group, Stack, Stepper, Text, Title } from "@mantine/core";
 import type { Messages } from "../i18n";
 import type { Snapshot } from "../api";
 import { LogPanel } from "./LogPanel";
@@ -29,52 +30,53 @@ export function EmbedWizard({
   onCancel: () => void;
   onClearLogs: () => void;
 }) {
+  const status =
+    embedStarting && !(snap?.embed.running || snap?.embedHealth?.ok)
+      ? m.starting
+      : snap?.embed.running || snap?.embedHealth?.ok
+        ? m.embedRunning
+        : m.embedStopped;
+  const health = snap?.embedHealth?.ready
+    ? " · ready"
+    : snap?.embedHealth?.ok
+      ? " · /health OK"
+      : "";
+
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <h2>{m.embedWizardTitle}</h2>
-        <button type="button" className="btn ghost" onClick={onBack}>
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Title order={3}>{m.embedWizardTitle}</Title>
+        <Button variant="subtle" size="xs" onClick={onBack}>
           {m.embedWizardBack}
-        </button>
-      </div>
+        </Button>
+      </Group>
       {snap && (
-        <p className="ok-text" style={{ marginTop: 0 }}>
-          {m.embedStatus}:{" "}
-          {embedStarting && !(snap.embed.running || snap.embedHealth?.ok)
-            ? m.starting
-            : snap.embed.running || snap.embedHealth?.ok
-              ? m.embedRunning
-              : m.embedStopped}
-          {snap.embedHealth?.ready ? " · ready" : snap.embedHealth?.ok ? " · /health OK" : ""}
-        </p>
+        <Text size="sm">
+          {m.embedStatus}: {status}
+          {health}
+        </Text>
       )}
-      <p className="muted">{m.embedWizardLead}</p>
-      <ol className="wizard-steps">
-        {wizardSteps.map((label, i) => (
-          <li key={label} className={wizardStep === i ? "current" : ""}>
-            {label}
-          </li>
+      <Text size="sm" c="dimmed">
+        {m.embedWizardLead}
+      </Text>
+      <Stepper active={wizardStep} size="sm">
+        {wizardSteps.map((label) => (
+          <Stepper.Step key={label} label={label} />
         ))}
-      </ol>
-      {prereq && <p className="ok-text">{prereq}</p>}
-      <div className="row">
+      </Stepper>
+      {prereq && <Text size="sm">{prereq}</Text>}
+      <Group>
         {wizardSteps.map((_, i) => (
-          <button
-            key={i}
-            type="button"
-            className="btn"
-            disabled={busy}
-            onClick={() => onStep(i)}
-          >
+          <Button key={i} size="xs" variant="default" disabled={busy} onClick={() => onStep(i)}>
             {m.runStep} {i + 1}
-          </button>
+          </Button>
         ))}
         {busy && (
-          <button type="button" className="btn ghost" onClick={onCancel}>
+          <Button size="xs" variant="subtle" onClick={onCancel}>
             {m.cancelJob}
-          </button>
+          </Button>
         )}
-      </div>
+      </Group>
       <LogPanel
         title={m.logs}
         autoScrollLabel={m.autoScroll}
@@ -83,6 +85,6 @@ export function EmbedWizard({
         lines={logLines}
         onClear={onClearLogs}
       />
-    </section>
+    </Stack>
   );
 }

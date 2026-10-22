@@ -1,5 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  Alert,
+  AppShell,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Modal,
+  NavLink,
+  NumberInput,
+  Paper,
+  ScrollArea,
+  Select,
+  SimpleGrid,
+  Stack,
+  Switch,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
+import {
   AppConfig,
   Snapshot,
   cancelActiveJob,
@@ -50,6 +70,11 @@ function servicePhase(up: boolean, pending: boolean): ServicePhase {
   if (up) return "running";
   if (pending) return "starting";
   return "stopped";
+}
+
+function projectName(path: string): string {
+  const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
+  return parts[parts.length - 1] || path;
 }
 
 function projectOptionLabel(path: string): string {
@@ -392,10 +417,16 @@ export default function App() {
 
   if (!cfg) {
     return (
-      <div className="app-frame welcome">
-        <Header title={appName} subtitle={m.tagline} locale={locale} onLocale={onLocale} m={m} />
-        <p className="lede">{m.welcomeLead}</p>
-      </div>
+      <AppShell header={{ height: 56 }} padding="lg">
+        <AppShell.Header>
+          <Header title={appName} subtitle={m.tagline} locale={locale} onLocale={onLocale} m={m} />
+        </AppShell.Header>
+        <AppShell.Main>
+          <Text c="dimmed" maw={560}>
+            {m.welcomeLead}
+          </Text>
+        </AppShell.Main>
+      </AppShell>
     );
   }
 
@@ -407,105 +438,120 @@ export default function App() {
   ];
 
   return (
-    <div className="app-frame">
-      <Header title={appName} subtitle={m.tagline} locale={locale} onLocale={onLocale} m={m} />
-      {showBoot && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <h2>{m.runtimeTitle}</h2>
-            <p className="muted">{m.runtimeLead}</p>
-            <div className="log-panel mini">{logLines.slice(-8).join("\n") || m.noLogs}</div>
-            <div className="row">
-              <button
-                type="button"
-                className="btn primary"
-                disabled={busy}
-                onClick={() =>
-                  runJob(async () => {
-                    await ensureRuntime(LOG_STREAM);
-                  })
-                }
-              >
-                {m.runtimeEnsure}
-              </button>
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={() => setBootDismissed(true)}
-              >
-                {m.skipProject}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      <div className="app-body">
-      <aside className="sidebar">
-        <nav>
-          <button
-            type="button"
-            className={page === "dashboard" ? "nav active" : "nav"}
-            onClick={() => {
-              setPage("dashboard");
-              setShowEmbedWizard(false);
-            }}
-          >
-            {m.navOverview}
-          </button>
-          <button
-            type="button"
-            className={page === "settings" ? "nav active" : "nav"}
-            onClick={() => setPage("settings")}
-          >
-            {m.navSettings}
-          </button>
-        </nav>
-      </aside>
-
-      <main className="main">
-        <div className="project-bar">
-          <div className="project-bar-label">{m.currentProject}</div>
-          {recentProjects.length > 0 && (
-            <select
-              className="project-select mono"
-              value={cfg.projectRoot}
-              aria-label={m.recentPlaceholder}
-              disabled={switchingProject}
-              onChange={(e) => {
-                const next = e.target.value;
-                if (next && next !== cfg.projectRoot) void openProjectPath(next);
-              }}
+    <AppShell header={{ height: 56 }} navbar={{ width: 200, breakpoint: 0 }} padding="md">
+      <AppShell.Header>
+        <Header title={appName} subtitle={m.tagline} locale={locale} onLocale={onLocale} m={m} />
+      </AppShell.Header>
+      <Modal
+        opened={showBoot}
+        onClose={() => setBootDismissed(true)}
+        title={m.runtimeTitle}
+        centered
+      >
+        <Stack>
+          <Text size="sm" c="dimmed">
+            {m.runtimeLead}
+          </Text>
+          <ScrollArea h={140}>
+            <Text size="xs" ff="monospace" style={{ whiteSpace: "pre-wrap" }}>
+              {logLines.slice(-8).join("\n") || m.noLogs}
+            </Text>
+          </ScrollArea>
+          <Group>
+            <Button
+              size="xs"
+              disabled={busy}
+              onClick={() =>
+                runJob(async () => {
+                  await ensureRuntime(LOG_STREAM);
+                })
+              }
             >
-              {!cfg.projectRoot && <option value="">{m.recentPlaceholder}</option>}
-              {recentProjects.map((path) => (
-                <option key={path} value={path} title={path}>
-                  {projectOptionLabel(path)}
-                </option>
-              ))}
-            </select>
-          )}
-          <div className="project-bar-path mono" title={cfg.projectRoot || m.projectOptional}>
-            {cfg.projectRoot || m.projectOptional}
-          </div>
-          <div className="project-bar-actions">
-            {cfg.projectRoot && (
-              <button type="button" className="btn ghost small" onClick={() => onRevealPath(cfg.projectRoot)}>
-                {m.openInFinder}
-              </button>
-            )}
-            <button type="button" className="btn ghost small" disabled={switchingProject} onClick={onPickProject}>
-              {recentProjects.length > 0 ? m.pickAnother : m.pickProject}
-            </button>
-          </div>
-        </div>
+              {m.runtimeEnsure}
+            </Button>
+            <Button size="xs" variant="subtle" onClick={() => setBootDismissed(true)}>
+              {m.skipProject}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+      <AppShell.Navbar p="sm">
+        <NavLink
+          label={m.navOverview}
+          active={page === "dashboard"}
+          onClick={() => {
+            setPage("dashboard");
+            setShowEmbedWizard(false);
+          }}
+        />
+        <NavLink
+          label={m.navSettings}
+          active={page === "settings"}
+          onClick={() => setPage("settings")}
+        />
+      </AppShell.Navbar>
+      <AppShell.Main>
+        <Paper withBorder p="md" radius="md" mb="md">
+          <Group justify="space-between" align="flex-end" wrap="nowrap">
+            <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
+              <Text size="xs" c="dimmed">
+                {m.currentProject}
+              </Text>
+              {recentProjects.length > 1 ? (
+                <Select
+                  aria-label={m.recentPlaceholder}
+                  data={recentProjects.map((path) => ({
+                    value: path,
+                    label: projectOptionLabel(path),
+                  }))}
+                  value={cfg.projectRoot || null}
+                  disabled={switchingProject}
+                  allowDeselect={false}
+                  onChange={(next) => {
+                    if (next && next !== cfg.projectRoot) void openProjectPath(next);
+                  }}
+                />
+              ) : (
+                <Text fw={600}>
+                  {cfg.projectRoot ? projectName(cfg.projectRoot) : m.projectOptional}
+                </Text>
+              )}
+              {cfg.projectRoot && (
+                <Text size="xs" c="dimmed" ff="monospace" truncate title={cfg.projectRoot}>
+                  {cfg.projectRoot}
+                </Text>
+              )}
+            </Stack>
+            <Group gap="xs" wrap="nowrap">
+              {cfg.projectRoot && (
+                <Button size="xs" variant="subtle" onClick={() => onRevealPath(cfg.projectRoot)}>
+                  {m.openInFinder}
+                </Button>
+              )}
+              <Button size="xs" variant="subtle" disabled={switchingProject} onClick={onPickProject}>
+                {recentProjects.length > 0 ? m.pickAnother : m.pickProject}
+              </Button>
+            </Group>
+          </Group>
+        </Paper>
 
-        {snap?.hint && page === "dashboard" && !showEmbedWizard && (
-          <div className="hint-bar">{snap.hint}</div>
-        )}
-        {notice && <div className="hint-bar">{notice}</div>}
-        {(error || snap?.yamlError) && (
-          <div className="error-bar">{error || snap?.yamlError}</div>
-        )}
+        <Stack gap="sm" mb="md">
+          {snap?.hint && page === "dashboard" && !showEmbedWizard && (
+            <Text size="sm" c="dimmed">
+              {snap.hint}
+            </Text>
+          )}
+          {notice && (
+            <Alert variant="light">
+              {notice}
+            </Alert>
+          )}
+          {(error || snap?.yamlError) && (
+            <Alert variant="light" color="red">
+              {error || snap?.yamlError}
+            </Alert>
+          )}
+        </Stack>
 
         {page === "dashboard" && showEmbedWizard && (
           <EmbedWizard
@@ -592,9 +638,8 @@ export default function App() {
             runtimeLogLines={logLines}
           />
         )}
-      </main>
-      </div>
-    </div>
+      </AppShell.Main>
+    </AppShell>
   );
 }
 
@@ -642,28 +687,32 @@ function Dashboard({
   const waitLabel = m.starting;
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <h2>{m.serviceOverview}</h2>
-        <div className="row" style={{ margin: 0 }}>
+    <Stack gap="lg">
+      <Group justify="space-between">
+        <Title order={3}>{m.serviceOverview}</Title>
+        <Group gap="xs">
           {busy && (
-            <button type="button" className="btn ghost" onClick={onCancelJob}>
+            <Button size="xs" variant="subtle" onClick={onCancelJob}>
               {m.cancelJob}
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn ghost" onClick={onRefresh} disabled={busy}>
+          <Button size="xs" variant="subtle" onClick={onRefresh} disabled={busy}>
             {m.refresh}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </Group>
+      </Group>
 
-      <div className="scope-block scope-global">
-        <div className="scope-head">
-          <h3>{m.scopeGlobal}</h3>
-          <span className="scope-badge global">Global</span>
-        </div>
-        <p className="scope-hint">{m.scopeGlobalHint}</p>
-        <div className="cards cards-single">
+      <Stack gap="sm">
+        <Group gap="xs">
+          <Title order={4}>{m.scopeGlobal}</Title>
+          <Badge variant="outline">
+            Global
+          </Badge>
+        </Group>
+        <Text size="sm" c="dimmed">
+          {m.scopeGlobalHint}
+        </Text>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <ServiceCard
             title={m.embed}
             port={snap.embed.port}
@@ -686,34 +735,35 @@ function Dashboard({
               <>
                 {snap.embed.healthy && <StatusPill label="healthy" tone="ok" />}
                 {embedReady && <StatusPill label="ready" tone="ok" />}
-                {embedPhase === "stopped" && <StatusPill label={stopLabel} tone="off" />}
               </>
             }
             actions={
               <>
-                <button type="button" className="btn primary" disabled={busy} onClick={onEmbedStart}>
+                <Button size="xs" disabled={busy} onClick={onEmbedStart}>
                   {m.embedStart}
-                </button>
-                <button type="button" className="btn" disabled={busy} onClick={onEmbedStop}>
+                </Button>
+                <Button size="xs" variant="default" disabled={busy} onClick={onEmbedStop}>
                   {m.embedStop}
-                </button>
-                <button type="button" className="btn ghost" onClick={onOpenEmbedWizard}>
+                </Button>
+                <Button size="xs" variant="subtle" onClick={onOpenEmbedWizard}>
                   {m.embedWizardOpen}
-                </button>
+                </Button>
               </>
             }
           />
-        </div>
-      </div>
+        </SimpleGrid>
+      </Stack>
 
       {hasProject && (
-      <div className="scope-block scope-project">
-        <div className="scope-head">
-          <h3>{m.scopeProject}</h3>
-          <span className="scope-badge project">Project</span>
-        </div>
-        <p className="scope-hint">{m.scopeProjectHint}</p>
-        <div className="cards">
+      <Stack gap="sm">
+        <Group gap="xs">
+          <Title order={4}>{m.scopeProject}</Title>
+          <Badge variant="outline">Project</Badge>
+        </Group>
+        <Text size="sm" c="dimmed">
+          {m.scopeProjectHint}
+        </Text>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <ServiceCard
             title={m.host}
             port={snap.host.port}
@@ -724,12 +774,12 @@ function Dashboard({
             extra={`${m.rules} ${snap.host.rules ?? 0}`}
             actions={
               <>
-                <button type="button" className="btn primary" disabled={busy} onClick={() => onStack(true)}>
+                <Button size="xs" disabled={busy} onClick={() => onStack(true)}>
                   {m.stackUp}
-                </button>
-                <button type="button" className="btn" disabled={busy} onClick={() => onStack(false)}>
+                </Button>
+                <Button size="xs" variant="default" disabled={busy} onClick={() => onStack(false)}>
                   {m.stackDown}
-                </button>
+                </Button>
               </>
             }
           />
@@ -745,7 +795,11 @@ function Dashboard({
                 ? `indexed: ${snap.shelves.indexed ? m.indexedYes : m.indexedNo} · roots: ${(snap.shelves.roots ?? []).join(", ") || "—"}`
                 : m.shelvesOff
             }
-            actions={<span className="muted">{m.shelvesHint}</span>}
+            actions={
+              <Text size="xs" c="dimmed">
+                {m.shelvesHint}
+              </Text>
+            }
           />
           <ServiceCard
             title={m.desk}
@@ -756,24 +810,28 @@ function Dashboard({
             waitLabel={waitLabel}
             extra={hostUp ? snap.deskUrl : m.deskNeedHost}
             actions={
-              <button type="button" className="btn" disabled={!hostUp} onClick={onOpenDesk}>
+              <Button size="xs" variant="default" disabled={!hostUp} onClick={onOpenDesk}>
                 {m.openBrowser}
-              </button>
+              </Button>
             }
           />
-          <div className="card vault-card">
-            <h3>{m.vault}</h3>
-            <p className="mono vault-path" title={snap.vault}>
+          <Card withBorder padding="md" radius="md">
+            <Text fw={600} mb="sm">
+              {m.vault}
+            </Text>
+            <Text size="sm" c="dimmed" ff="monospace" lineClamp={3} title={snap.vault}>
               {snap.vault || "—"}
-            </p>
-            <button type="button" className="btn ghost" disabled={!snap.vault} onClick={onRevealVault}>
-              {m.openInFinder}
-            </button>
-          </div>
-        </div>
-      </div>
+            </Text>
+            <Group mt="md">
+              <Button size="xs" variant="subtle" disabled={!snap.vault} onClick={onRevealVault}>
+                {m.openInFinder}
+              </Button>
+            </Group>
+          </Card>
+        </SimpleGrid>
+      </Stack>
       )}
-    </section>
+    </Stack>
   );
 }
 
@@ -799,18 +857,32 @@ function ServiceCard({
   waitLabel: string;
 }) {
   const label = phase === "running" ? runLabel : phase === "starting" ? waitLabel : stopLabel;
-  const tone = phase === "running" ? "ok" : phase === "starting" ? "warn" : "off";
+  const color = phase === "running" ? "teal" : phase === "starting" ? "yellow" : "gray";
   return (
-    <div className="card">
-      <div className="card-top">
-        <h3>{title}</h3>
-        {port > 0 && <span className="muted">:{port}</span>}
-        <StatusPill label={label} tone={tone} />
-        {pills}
-      </div>
-      <p className="card-extra">{extra}</p>
-      <div className="card-actions">{actions}</div>
-    </div>
+    <Card withBorder padding="md" radius="md">
+      <Group justify="space-between" mb="sm">
+        <Text fw={600}>{title}</Text>
+        {port > 0 && (
+          <Text size="xs" c="dimmed" ff="monospace">
+            {port}
+          </Text>
+        )}
+      </Group>
+      <Badge variant="dot" color={color} size="sm">
+        {label}
+      </Badge>
+      {pills && (
+        <Group gap={6} mt="xs">
+          {pills}
+        </Group>
+      )}
+      <Text size="sm" c="dimmed" mt="sm" style={{ minHeight: 40 }}>
+        {extra}
+      </Text>
+      <Group mt="md" gap="xs">
+        {actions}
+      </Group>
+    </Card>
   );
 }
 
@@ -987,204 +1059,196 @@ function Settings({
     }
   };
 
+  const monoInput = { input: { fontFamily: "var(--mantine-font-family-monospace)" } };
+
   return (
-    <section className="panel">
-      <h2>{m.settings}</h2>
-      <h3>{m.runtimeTitle}</h3>
-      <p className="muted">{runtimeStatus?.ready ? m.runtimeReady : m.runtimeNotReady}</p>
-      <div className="row">
-        <button type="button" className="btn primary" disabled={busy} onClick={onEnsureRuntime}>
-          {m.runtimeEnsure}
-        </button>
-        <button type="button" className="btn ghost" disabled={busy} onClick={onRefreshRuntime}>
-          {m.refresh}
-        </button>
-      </div>
-      {(busy || runtimeLogLines.length > 0) && (
-        <div className="log-panel mini runtime-log">
-          {runtimeLogLines.length > 0
-            ? runtimeLogLines.map((l, i) => <div key={i}>{l}</div>)
-            : m.runtimeUpdating}
-        </div>
-      )}
-      <ul className="runtime-list">
-        {runtimeStatus?.components.map((c) => (
-          <li key={c.name}>
-            <strong>{c.name}</strong>{" "}
-            {c.installed
-              ? c.latest && c.version && c.latest !== c.version
-                ? `${c.version} → ${c.latest}`
-                : c.version || "ok"
-              : c.latest
-                ? `— → ${c.latest}`
-                : "—"}{" "}
-            · <span className="mono">{c.path || "—"}</span>
-            {c.managedByConsole === true && (c.installed || c.name === "imprint") && (
-              <button
-                type="button"
-                className="btn ghost small"
-                disabled={busy}
-                onClick={() => onUpdateComponent(c.name)}
-              >
-                {m.runtimeUpdate}
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-      <h3>{m.globalEmbedTitle}</h3>
-      <p className="muted">{m.globalEmbedHint}</p>
-      {embedForm && (
-        <>
-          <label className="field check">
-            <input
-              type="checkbox"
+    <Stack gap="lg" maw={760}>
+      <Title order={3}>{m.settings}</Title>
+      <Stack gap="sm">
+        <Title order={4}>{m.runtimeTitle}</Title>
+        <Text size="sm" c="dimmed">
+          {runtimeStatus?.ready ? m.runtimeReady : m.runtimeNotReady}
+        </Text>
+        <Group>
+          <Button size="xs" disabled={busy} onClick={onEnsureRuntime}>
+            {m.runtimeEnsure}
+          </Button>
+          <Button size="xs" variant="subtle" disabled={busy} onClick={onRefreshRuntime}>
+            {m.refresh}
+          </Button>
+        </Group>
+        {(busy || runtimeLogLines.length > 0) && (
+          <ScrollArea h={120}>
+            <Text size="xs" ff="monospace" style={{ whiteSpace: "pre-wrap" }}>
+              {runtimeLogLines.length > 0 ? runtimeLogLines.join("\n") : m.runtimeUpdating}
+            </Text>
+          </ScrollArea>
+        )}
+        <Stack gap="xs">
+          {runtimeStatus?.components.map((c) => (
+            <Group key={c.name} justify="space-between" wrap="nowrap">
+              <Text size="sm">
+                <Text span fw={600}>
+                  {c.name}
+                </Text>{" "}
+                {c.installed
+                  ? c.latest && c.version && c.latest !== c.version
+                    ? `${c.version} → ${c.latest}`
+                    : c.version || "ok"
+                  : c.latest
+                    ? `— → ${c.latest}`
+                    : "—"}{" "}
+                ·{" "}
+                <Text span ff="monospace" size="xs">
+                  {c.path || "—"}
+                </Text>
+              </Text>
+              {c.managedByConsole === true && (c.installed || c.name === "imprint") && (
+                <Button size="xs" variant="subtle" disabled={busy} onClick={() => onUpdateComponent(c.name)}>
+                  {m.runtimeUpdate}
+                </Button>
+              )}
+            </Group>
+          ))}
+        </Stack>
+      </Stack>
+
+      <Stack gap="sm">
+        <Title order={4}>{m.globalEmbedTitle}</Title>
+        <Text size="sm" c="dimmed">
+          {m.globalEmbedHint}
+        </Text>
+        {embedForm && (
+          <>
+            <Switch
+              label={m.globalEmbedEnabled}
               checked={embedForm.enabled}
-              onChange={(e) => setEmbedForm({ ...embedForm, enabled: e.target.checked })}
-            />{" "}
-            {m.globalEmbedEnabled}
-          </label>
-          <label className="field">
-            package
-            <input value={embedForm.package} readOnly className="mono" />
-          </label>
-          <div className="field-grid">
-            <label className="field">
-              {m.embedPort}
-              <span className="field-hint">port</span>
-              <input
-                type="number"
+              onChange={(e) => setEmbedForm({ ...embedForm, enabled: e.currentTarget.checked })}
+            />
+            <TextInput label="package" value={embedForm.package} readOnly styles={monoInput} />
+            <SimpleGrid cols={{ base: 1, sm: 2 }}>
+              <NumberInput
+                label={m.embedPort}
+                description="port"
                 min={1}
                 max={65535}
-                step={1}
                 value={embedForm.port}
-                onChange={(e) => setEmbedForm({ ...embedForm, port: e.target.value })}
+                onChange={(v) => setEmbedForm({ ...embedForm, port: v === "" ? "" : String(v) })}
               />
-            </label>
-            <label className="field">
-              {m.embedTimeout}
-              <span className="field-hint">timeout_seconds</span>
-              <input
-                type="number"
+              <NumberInput
+                label={m.embedTimeout}
+                description="timeout_seconds"
                 min={1}
                 max={3600}
-                step={1}
                 value={embedForm.timeoutSeconds}
-                onChange={(e) => setEmbedForm({ ...embedForm, timeoutSeconds: e.target.value })}
+                onChange={(v) =>
+                  setEmbedForm({ ...embedForm, timeoutSeconds: v === "" ? "" : String(v) })
+                }
               />
-            </label>
-            <label className="field">
-              {m.embedDuplicate}
-              <span className="field-hint">duplicate_threshold</span>
-              <input
-                type="number"
+              <NumberInput
+                label={m.embedDuplicate}
+                description="duplicate_threshold"
                 min={0}
                 max={1}
                 step={0.01}
+                decimalScale={2}
                 value={embedForm.duplicateThreshold}
-                onChange={(e) => setEmbedForm({ ...embedForm, duplicateThreshold: e.target.value })}
+                onChange={(v) =>
+                  setEmbedForm({ ...embedForm, duplicateThreshold: v === "" ? "" : String(v) })
+                }
               />
-            </label>
-            <label className="field">
-              {m.embedContradiction}
-              <span className="field-hint">relate_contradiction_min</span>
-              <input
-                type="number"
+              <NumberInput
+                label={m.embedContradiction}
+                description="relate_contradiction_min"
                 min={0}
                 max={1}
                 step={0.01}
+                decimalScale={2}
                 value={embedForm.relateContradictionMin}
-                onChange={(e) =>
-                  setEmbedForm({ ...embedForm, relateContradictionMin: e.target.value })
+                onChange={(v) =>
+                  setEmbedForm({
+                    ...embedForm,
+                    relateContradictionMin: v === "" ? "" : String(v),
+                  })
                 }
               />
-            </label>
-            <label className="field">
-              {m.embedEntailment}
-              <span className="field-hint">relate_entailment_min</span>
-              <input
-                type="number"
+              <NumberInput
+                label={m.embedEntailment}
+                description="relate_entailment_min"
                 min={0}
                 max={1}
                 step={0.01}
+                decimalScale={2}
                 value={embedForm.relateEntailmentMin}
-                onChange={(e) =>
-                  setEmbedForm({ ...embedForm, relateEntailmentMin: e.target.value })
+                onChange={(v) =>
+                  setEmbedForm({ ...embedForm, relateEntailmentMin: v === "" ? "" : String(v) })
                 }
               />
-            </label>
-          </div>
-          <label className="field">
-            {m.embedModel}
-            <span className="field-hint">model</span>
-            <input
+            </SimpleGrid>
+            <TextInput
+              label={m.embedModel}
+              description="model"
               value={embedForm.model}
-              className="mono"
-              onChange={(e) => setEmbedForm({ ...embedForm, model: e.target.value })}
+              styles={monoInput}
+              onChange={(e) => setEmbedForm({ ...embedForm, model: e.currentTarget.value })}
             />
-          </label>
-          <label className="field check">
-            <input
-              type="checkbox"
+            <Switch
+              label={m.embedBidirectional}
+              description="relate_bidirectional"
               checked={embedForm.relateBidirectional}
               onChange={(e) =>
-                setEmbedForm({ ...embedForm, relateBidirectional: e.target.checked })
+                setEmbedForm({ ...embedForm, relateBidirectional: e.currentTarget.checked })
               }
             />
-            <span>
-              {m.embedBidirectional}
-              <span className="field-hint">relate_bidirectional</span>
-            </span>
-          </label>
-          {embedError && <div className="error-bar">{embedError}</div>}
-          <button type="button" className="btn" onClick={() => void saveEmbed()}>
-            {m.save}
-          </button>
-        </>
-      )}
-      <h3>{m.settings}</h3>
-      <label className="field">
-        {m.imprintBin}
-        <span className="field-hint">{m.imprintBinHint}</span>
-        <input
+            {embedError && (
+              <Alert variant="light" color="red">
+                {embedError}
+              </Alert>
+            )}
+            <Group>
+              <Button size="xs" onClick={() => void saveEmbed()}>
+                {m.save}
+              </Button>
+            </Group>
+          </>
+        )}
+      </Stack>
+
+      <Stack gap="sm">
+        <Title order={4}>{m.settings}</Title>
+        <TextInput
+          label={m.imprintBin}
+          description={m.imprintBinHint}
           value={draft.imprintBin}
-          onChange={(e) => setDraft({ ...draft, imprintBin: e.target.value })}
-          className="mono"
+          styles={monoInput}
           placeholder="imprint 或绝对路径"
+          onChange={(e) => setDraft({ ...draft, imprintBin: e.currentTarget.value })}
         />
-      </label>
-      <label className="field">
-        {m.pollMs}
-        <input
-          type="number"
+        <NumberInput
+          label={m.pollMs}
           value={draft.pollIntervalMs}
-          onChange={(e) =>
-            setDraft({ ...draft, pollIntervalMs: Number(e.target.value) || 2500 })
+          min={500}
+          onChange={(v) =>
+            setDraft({ ...draft, pollIntervalMs: typeof v === "number" ? v : Number(v) || 2500 })
           }
         />
-      </label>
-      <label className="field">
-        {m.hfEndpoint}
-        <input
+        <TextInput
+          label={m.hfEndpoint}
           value={draft.hfEndpoint}
-          onChange={(e) => setDraft({ ...draft, hfEndpoint: e.target.value })}
           placeholder="https://hf-mirror.com"
+          onChange={(e) => setDraft({ ...draft, hfEndpoint: e.currentTarget.value })}
         />
-      </label>
-      <label className="field">
-        {m.imprintHf}
-        <input
+        <TextInput
+          label={m.imprintHf}
           value={draft.imprintHfEndpoint}
-          onChange={(e) => setDraft({ ...draft, imprintHfEndpoint: e.target.value })}
+          onChange={(e) => setDraft({ ...draft, imprintHfEndpoint: e.currentTarget.value })}
         />
-      </label>
-      <button
-        type="button"
-        className="btn primary"
-        onClick={() => onSave({ ...draft, locale })}
-      >
-        {m.save}
-      </button>
-    </section>
+        <Group>
+          <Button size="xs" onClick={() => onSave({ ...draft, locale })}>
+            {m.save}
+          </Button>
+        </Group>
+      </Stack>
+    </Stack>
   );
 }
