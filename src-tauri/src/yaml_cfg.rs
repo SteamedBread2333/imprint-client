@@ -1,12 +1,10 @@
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 struct ImprintYaml {
     host: Option<HostSection>,
     shelves: Option<ShelvesSection>,
-    plugins: Option<HashMap<String, PluginEntry>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -25,31 +23,10 @@ struct ShelvesConfigInner {
     roots: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize)]
-struct PluginEntry {
-    enabled: Option<bool>,
-    config: Option<HashMap<String, serde_yaml::Value>>,
-}
-
 pub struct ProjectYamlInfo {
     pub host_listen: String,
-    pub desk_port: u16,
-    #[allow(dead_code)]
-    pub desk_enabled: bool,
     pub shelves_enabled: bool,
     pub shelves_roots: Vec<String>,
-}
-
-fn plugin_port(entry: &PluginEntry, default_port: u16) -> u16 {
-    entry
-        .config
-        .as_ref()
-        .and_then(|c| c.get("port"))
-        .and_then(|v| match v {
-            serde_yaml::Value::Number(n) => n.as_u64().map(|x| x as u16),
-            _ => None,
-        })
-        .unwrap_or(default_port)
 }
 
 pub fn parse_project_yaml(project_root: &str) -> Result<ProjectYamlInfo, String> {
@@ -75,15 +52,8 @@ pub fn parse_project_yaml(project_root: &str) -> Result<ProjectYamlInfo, String>
         .and_then(|c| c.roots.clone())
         .unwrap_or_default();
 
-    let plugins = doc.plugins.unwrap_or_default();
-    let desk = plugins.get("desk");
-    let desk_enabled = desk.and_then(|d| d.enabled).unwrap_or(false);
-    let desk_port = desk.map(|d| plugin_port(d, 4173)).unwrap_or(4173);
-
     Ok(ProjectYamlInfo {
         host_listen,
-        desk_port,
-        desk_enabled,
         shelves_enabled,
         shelves_roots,
     })

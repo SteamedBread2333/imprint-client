@@ -9,8 +9,7 @@
 [![release](https://img.shields.io/github/v/release/SteamedBread2333/imprint-console?include_prereleases&style=flat-square)](https://github.com/SteamedBread2333/imprint-console/releases)
 ![MIT](https://img.shields.io/badge/license-MIT-c4a574?style=flat-square)
 
-查看 Host / Shelves / Desk、全局 Embed；可自动安装 imprint / Python / sidecar。  
-不是终端用户产品；审计规则请用 [imprint-desk-plugin](https://github.com/SteamedBread2333/imprint-desk-plugin)。
+管理 Host / Shelves、内置只读审计工作台与全局 Embed；可自动安装 imprint / Python / sidecar。
 
 </div>
 
@@ -27,7 +26,9 @@ npm run tauri dev
 
 首次启动在弹窗中 **准备运行环境**；也可在 **设置 → 运行环境** 中安装或更新。  
 Embed 配置全局一份：`~/.imprint/embed.yaml`（项目 `imprint.yaml` **不含** `plugins.embed`）。  
-可选：选择含 `imprint.yaml` 的项目根以管理 Host / Shelves / Desk；不选项目也可启停 Embed。
+可选：选择含 `imprint.yaml` 的项目根以管理 Host / Shelves，并在 Audit 中查看规则、文档与统一关系图；不选项目也可启停 Embed。
+
+Audit 通过类型化 Tauri 命令访问当前项目的本机 Host，不启动 Node/Express 服务，也不依赖 `imprint-desk-plugin` 或端口 4173。工作台只读；规则写入仍由 imprint CLI/MCP 完成。
 
 详见 [docs/runtime-releases.md](docs/runtime-releases.md)。
 

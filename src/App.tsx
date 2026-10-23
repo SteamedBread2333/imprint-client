@@ -1,75 +1,59 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   AppShell,
-  Badge,
   Button,
-  Card,
   Group,
   Modal,
   NavLink,
-  NumberInput,
   Paper,
   ScrollArea,
   Select,
-  SimpleGrid,
   Stack,
-  Switch,
   Text,
-  TextInput,
-  Title,
 } from "@mantine/core";
 import {
-  AppConfig,
-  Snapshot,
+  type AppConfig,
+  type Snapshot,
   cancelActiveJob,
   releaseActiveJob,
   checkPrerequisites,
   ensureRuntime,
   getConfig,
-  getGlobalEmbed,
   getRuntimeStatus,
   getSnapshot,
   imprintUpDown,
   openProject,
-  openExternalUrl,
   pickProjectFolder,
   revealInFinder,
   runImprint,
   runSidecarSetup,
   saveConfig,
-  saveGlobalEmbed,
   startSidecarLogTail,
   stopSidecarLogTail,
   subscribeJobFinished,
   subscribeJobOutput,
   updateRuntimeComponent,
-  type GlobalEmbedDoc,
   type RuntimeStatus,
-} from "./api";
+} from "./platform/tauri/api";
 import { Header } from "./components/Header";
 import { EmbedWizard } from "./components/EmbedWizard";
-import { StatusPill } from "./components/StatusPill";
+import { DashboardPage } from "./features/ops/DashboardPage";
+import { SettingsPage } from "./features/settings/SettingsPage";
+import { DeskPage } from "./features/audit/DeskPage";
 import { APP_NAME, type Locale, t } from "./i18n";
 import "./App.css";
 
-type Page = "dashboard" | "settings";
+type Page = "dashboard" | "audit" | "settings";
 
 const LOG_STREAM = "main-log";
 const START_WAIT_MS = 20_000;
 
 type StartMark = { at: number; settled: boolean } | null;
-type StartWatch = { host: StartMark; desk: StartMark; embed: StartMark };
+type StartWatch = { host: StartMark; embed: StartMark };
 
 function armStart(): StartMark {
   return { at: Date.now(), settled: false };
-}
-type ServicePhase = "running" | "stopped" | "starting";
-
-function servicePhase(up: boolean, pending: boolean): ServicePhase {
-  if (up) return "running";
-  if (pending) return "starting";
-  return "stopped";
 }
 
 function projectName(path: string): string {
@@ -106,7 +90,6 @@ export default function App() {
   const [switchingProject, setSwitchingProject] = useState(false);
   const [startWatch, setStartWatch] = useState<StartWatch>({
     host: null,
-    desk: null,
     embed: null,
   });
   const busyRef = useRef(false);
@@ -179,10 +162,9 @@ export default function App() {
     setStartWatch((prev) => {
       const next: StartWatch = {
         host: prev.host != null && snap.host.listening ? null : prev.host,
-        desk: prev.desk != null && snap.desk.listening ? null : prev.desk,
         embed: prev.embed != null && embedUp ? null : prev.embed,
       };
-      if (next.host === prev.host && next.desk === prev.desk && next.embed === prev.embed) {
+      if (next.host === prev.host && next.embed === prev.embed) {
         return prev;
       }
       return next;
@@ -197,7 +179,6 @@ export default function App() {
         mark == null ? null : { at: now, settled: true };
       setStartWatch((prev) => ({
         host: settle(prev.host),
-        desk: settle(prev.desk),
         embed: settle(prev.embed),
       }));
     }
@@ -220,7 +201,6 @@ export default function App() {
       };
       const next = {
         host: take(prev.host, "Host"),
-        desk: take(prev.desk, "Desk"),
         embed: take(prev.embed, "Embed"),
       };
       if (expired.length === 0) return;
@@ -354,14 +334,13 @@ export default function App() {
       setStartWatch((prev) => ({
         ...prev,
         host: snap?.host.listening ? null : mark,
-        desk: snap?.desk.listening ? null : mark,
       }));
     }
     try {
       await imprintUpDown(up);
       await refresh();
     } catch (e) {
-      if (up) setStartWatch((prev) => ({ ...prev, host: null, desk: null }));
+      if (up) setStartWatch((prev) => ({ ...prev, host: null }));
       setError(String(e));
     } finally {
       setBusy(false);
@@ -477,10 +456,21 @@ export default function App() {
       </Modal>
       <AppShell.Navbar p="sm">
         <NavLink
+          data-testid="nav-dashboard"
           label={m.navOverview}
           active={page === "dashboard"}
           onClick={() => {
             setPage("dashboard");
+            setShowEmbedWizard(false);
+          }}
+        />
+        <NavLink
+          data-testid="nav-audit"
+          label={m.navAudit}
+          active={page === "audit"}
+          disabled={!cfg.projectRoot}
+          onClick={() => {
+            setPage("audit");
             setShowEmbedWizard(false);
           }}
         />
@@ -490,7 +480,7 @@ export default function App() {
           onClick={() => setPage("settings")}
         />
       </AppShell.Navbar>
-      <AppShell.Main>
+      <AppShell.Main className={page === "audit" ? "audit-shell" : undefined}>
         <Paper withBorder p="md" radius="md" mb="md">
           <Group justify="space-between" align="flex-end" wrap="nowrap">
             <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
@@ -576,7 +566,7 @@ export default function App() {
         )}
 
         {page === "dashboard" && !showEmbedWizard && snap && (
-          <Dashboard
+          <DashboardPage
             hasProject={!!cfg.projectRoot}
             m={m}
             snap={snap}
@@ -586,7 +576,6 @@ export default function App() {
             onRefresh={refresh}
             onStack={stackUpDown}
             pendingHost={startWatch.host != null}
-            pendingDesk={startWatch.desk != null}
             pendingEmbed={startWatch.embed != null}
             onCancelJob={() =>
               cancelActiveJob().then(() => {
@@ -594,7 +583,7 @@ export default function App() {
                 setStartWatch((prev) => ({ ...prev, embed: null }));
               })
             }
-            onOpenDesk={() => openExternalUrl(snap.deskUrl)}
+            onOpenAudit={() => setPage("audit")}
             onRevealVault={() => onRevealPath(snap.vault)}
             onOpenEmbedWizard={() => setShowEmbedWizard(true)}
             onEmbedStart={async () => {
@@ -617,8 +606,17 @@ export default function App() {
           />
         )}
 
+        {page === "audit" && snap && (
+          <DeskPage
+            vaultKey={snap.vault}
+            hostUp={hostUp}
+            shelvesEnabled={snap.shelves.enabled}
+            m={m}
+          />
+        )}
+
         {page === "settings" && cfg && (
-          <Settings
+          <SettingsPage
             m={m}
             cfg={cfg}
             locale={locale}
@@ -640,615 +638,5 @@ export default function App() {
         )}
       </AppShell.Main>
     </AppShell>
-  );
-}
-
-function Dashboard({
-  m,
-  snap,
-  hasProject,
-  busy,
-  hostUp,
-  embedReady,
-  onRefresh,
-  onStack,
-  pendingHost,
-  pendingDesk,
-  pendingEmbed,
-  onCancelJob,
-  onOpenDesk,
-  onRevealVault,
-  onOpenEmbedWizard,
-  onEmbedStart,
-  onEmbedStop,
-}: {
-  m: ReturnType<typeof t>;
-  snap: Snapshot;
-  hasProject: boolean;
-  busy: boolean;
-  hostUp: boolean;
-  embedReady: boolean;
-  onRefresh: () => void;
-  onStack: (up: boolean) => void;
-  pendingHost: boolean;
-  pendingDesk: boolean;
-  pendingEmbed: boolean;
-  onCancelJob: () => void;
-  onOpenDesk: () => void;
-  onRevealVault: () => void;
-  onOpenEmbedWizard: () => void;
-  onEmbedStart: () => void;
-  onEmbedStop: () => void;
-}) {
-  const embedUp = snap.embed.running || snap.embedHealth?.ok === true;
-  const embedPhase = servicePhase(embedUp, pendingEmbed);
-  const runLabel = m.running;
-  const stopLabel = m.stopped;
-  const waitLabel = m.starting;
-
-  return (
-    <Stack gap="lg">
-      <Group justify="space-between">
-        <Title order={3}>{m.serviceOverview}</Title>
-        <Group gap="xs">
-          {busy && (
-            <Button size="xs" variant="subtle" onClick={onCancelJob}>
-              {m.cancelJob}
-            </Button>
-          )}
-          <Button size="xs" variant="subtle" onClick={onRefresh} disabled={busy}>
-            {m.refresh}
-          </Button>
-        </Group>
-      </Group>
-
-      <Stack gap="sm">
-        <Group gap="xs">
-          <Title order={4}>{m.scopeGlobal}</Title>
-          <Badge variant="outline">
-            Global
-          </Badge>
-        </Group>
-        <Text size="sm" c="dimmed">
-          {m.scopeGlobalHint}
-        </Text>
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <ServiceCard
-            title={m.embed}
-            port={snap.embed.port}
-            phase={embedPhase}
-            runLabel={runLabel}
-            stopLabel={stopLabel}
-            waitLabel={waitLabel}
-            extra={
-              embedPhase === "starting"
-                ? m.starting
-                : embedReady
-                  ? m.embedReady
-                  : snap.embedHealth?.ok
-                    ? m.embedUpNotReady
-                    : snap.embed.running
-                      ? m.embedUpWait
-                      : snap.embed.error || m.embedDown
-            }
-            pills={
-              <>
-                {snap.embed.healthy && <StatusPill label="healthy" tone="ok" />}
-                {embedReady && <StatusPill label="ready" tone="ok" />}
-              </>
-            }
-            actions={
-              <>
-                <Button size="xs" disabled={busy} onClick={onEmbedStart}>
-                  {m.embedStart}
-                </Button>
-                <Button size="xs" variant="default" disabled={busy} onClick={onEmbedStop}>
-                  {m.embedStop}
-                </Button>
-                <Button size="xs" variant="subtle" onClick={onOpenEmbedWizard}>
-                  {m.embedWizardOpen}
-                </Button>
-              </>
-            }
-          />
-        </SimpleGrid>
-      </Stack>
-
-      {hasProject && (
-      <Stack gap="sm">
-        <Group gap="xs">
-          <Title order={4}>{m.scopeProject}</Title>
-          <Badge variant="outline">Project</Badge>
-        </Group>
-        <Text size="sm" c="dimmed">
-          {m.scopeProjectHint}
-        </Text>
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <ServiceCard
-            title={m.host}
-            port={snap.host.port}
-            phase={servicePhase(snap.host.listening, pendingHost)}
-            runLabel={runLabel}
-            stopLabel={stopLabel}
-            waitLabel={waitLabel}
-            extra={`${m.rules} ${snap.host.rules ?? 0}`}
-            actions={
-              <>
-                <Button size="xs" disabled={busy} onClick={() => onStack(true)}>
-                  {m.stackUp}
-                </Button>
-                <Button size="xs" variant="default" disabled={busy} onClick={() => onStack(false)}>
-                  {m.stackDown}
-                </Button>
-              </>
-            }
-          />
-          <ServiceCard
-            title={m.shelves}
-            port={0}
-            phase={servicePhase(snap.shelves.indexed, false)}
-            runLabel={runLabel}
-            stopLabel={stopLabel}
-            waitLabel={waitLabel}
-            extra={
-              snap.shelves.enabled
-                ? `indexed: ${snap.shelves.indexed ? m.indexedYes : m.indexedNo} · roots: ${(snap.shelves.roots ?? []).join(", ") || "—"}`
-                : m.shelvesOff
-            }
-            actions={
-              <Text size="xs" c="dimmed">
-                {m.shelvesHint}
-              </Text>
-            }
-          />
-          <ServiceCard
-            title={m.desk}
-            port={snap.desk.port}
-            phase={servicePhase(snap.desk.listening, pendingDesk)}
-            runLabel={runLabel}
-            stopLabel={stopLabel}
-            waitLabel={waitLabel}
-            extra={hostUp ? snap.deskUrl : m.deskNeedHost}
-            actions={
-              <Button size="xs" variant="default" disabled={!hostUp} onClick={onOpenDesk}>
-                {m.openBrowser}
-              </Button>
-            }
-          />
-          <Card withBorder padding="md" radius="md">
-            <Text fw={600} mb="sm">
-              {m.vault}
-            </Text>
-            <Text size="sm" c="dimmed" ff="monospace" lineClamp={3} title={snap.vault}>
-              {snap.vault || "—"}
-            </Text>
-            <Group mt="md">
-              <Button size="xs" variant="subtle" disabled={!snap.vault} onClick={onRevealVault}>
-                {m.openInFinder}
-              </Button>
-            </Group>
-          </Card>
-        </SimpleGrid>
-      </Stack>
-      )}
-    </Stack>
-  );
-}
-
-function ServiceCard({
-  title,
-  port,
-  phase,
-  extra,
-  actions,
-  pills,
-  runLabel,
-  stopLabel,
-  waitLabel,
-}: {
-  title: string;
-  port: number;
-  phase: ServicePhase;
-  extra: string;
-  actions: ReactNode;
-  pills?: ReactNode;
-  runLabel: string;
-  stopLabel: string;
-  waitLabel: string;
-}) {
-  const label = phase === "running" ? runLabel : phase === "starting" ? waitLabel : stopLabel;
-  const color = phase === "running" ? "teal" : phase === "starting" ? "yellow" : "gray";
-  return (
-    <Card withBorder padding="md" radius="md">
-      <Group justify="space-between" mb="sm">
-        <Text fw={600}>{title}</Text>
-        {port > 0 && (
-          <Text size="xs" c="dimmed" ff="monospace">
-            {port}
-          </Text>
-        )}
-      </Group>
-      <Badge variant="dot" color={color} size="sm">
-        {label}
-      </Badge>
-      {pills && (
-        <Group gap={6} mt="xs">
-          {pills}
-        </Group>
-      )}
-      <Text size="sm" c="dimmed" mt="sm" style={{ minHeight: 40 }}>
-        {extra}
-      </Text>
-      <Group mt="md" gap="xs">
-        {actions}
-      </Group>
-    </Card>
-  );
-}
-
-type EmbedForm = {
-  enabled: boolean;
-  package: string;
-  port: string;
-  model: string;
-  duplicateThreshold: string;
-  relateContradictionMin: string;
-  relateEntailmentMin: string;
-  relateBidirectional: boolean;
-  timeoutSeconds: string;
-};
-
-const EMBED_DEFAULTS = {
-  port: 4174,
-  model: "BAAI/bge-small-zh-v1.5",
-  duplicateThreshold: 0.65,
-  relateContradictionMin: 0.4,
-  relateEntailmentMin: 0.35,
-  relateBidirectional: true,
-  timeoutSeconds: 5,
-};
-
-function numField(v: unknown, fallback: number): string {
-  let n: number | null = null;
-  if (typeof v === "number" && Number.isFinite(v)) n = v;
-  else if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) n = Number(v);
-  if (n == null) return String(fallback);
-  if (Number.isInteger(n)) return String(n);
-  return String(Math.round(n * 1000) / 1000);
-}
-
-function embedFormFromDoc(doc: GlobalEmbedDoc): EmbedForm {
-  const c = doc.config ?? {};
-  const bidirectional = c.relate_bidirectional;
-  return {
-    enabled: doc.enabled,
-    package: doc.package,
-    port: numField(c.port, EMBED_DEFAULTS.port),
-    model: typeof c.model === "string" && c.model.trim() ? c.model : EMBED_DEFAULTS.model,
-    duplicateThreshold: numField(c.duplicate_threshold, EMBED_DEFAULTS.duplicateThreshold),
-    relateContradictionMin: numField(c.relate_contradiction_min, EMBED_DEFAULTS.relateContradictionMin),
-    relateEntailmentMin: numField(c.relate_entailment_min, EMBED_DEFAULTS.relateEntailmentMin),
-    relateBidirectional:
-      typeof bidirectional === "boolean" ? bidirectional : EMBED_DEFAULTS.relateBidirectional,
-    timeoutSeconds: numField(c.timeout_seconds, EMBED_DEFAULTS.timeoutSeconds),
-  };
-}
-
-function parseIntInRange(raw: string, min: number, max: number): number | null {
-  const text = raw.trim();
-  if (!/^\d+$/.test(text)) return null;
-  const n = Number(text);
-  if (!Number.isInteger(n) || n < min || n > max) return null;
-  return n;
-}
-
-function parseUnitInterval(raw: string): number | null {
-  const text = raw.trim();
-  if (text === "") return null;
-  const n = Number(text);
-  if (!Number.isFinite(n) || n < 0 || n > 1) return null;
-  return n;
-}
-
-type EmbedFieldError = "port" | "model" | "threshold" | "timeout";
-
-function embedFormError(form: EmbedForm): EmbedFieldError | null {
-  if (parseIntInRange(form.port, 1, 65535) == null) return "port";
-  if (!form.model.trim()) return "model";
-  if (
-    parseUnitInterval(form.duplicateThreshold) == null ||
-    parseUnitInterval(form.relateContradictionMin) == null ||
-    parseUnitInterval(form.relateEntailmentMin) == null
-  ) {
-    return "threshold";
-  }
-  if (parseIntInRange(form.timeoutSeconds, 1, 3600) == null) return "timeout";
-  return null;
-}
-
-function embedDocFromForm(base: GlobalEmbedDoc, form: EmbedForm): GlobalEmbedDoc {
-  return {
-    ...base,
-    enabled: form.enabled,
-    package: base.package,
-    config: {
-      ...base.config,
-      port: parseIntInRange(form.port, 1, 65535),
-      model: form.model.trim(),
-      duplicate_threshold: parseUnitInterval(form.duplicateThreshold),
-      relate_contradiction_min: parseUnitInterval(form.relateContradictionMin),
-      relate_entailment_min: parseUnitInterval(form.relateEntailmentMin),
-      relate_bidirectional: form.relateBidirectional,
-      timeout_seconds: parseIntInRange(form.timeoutSeconds, 1, 3600),
-    },
-  };
-}
-
-function Settings({
-  m,
-  cfg,
-  locale,
-  runtimeStatus,
-  busy,
-  onEnsureRuntime,
-  onUpdateComponent,
-  onSave,
-  onRefreshRuntime,
-  onEmbedSaved,
-  runtimeLogLines,
-}: {
-  m: ReturnType<typeof t>;
-  cfg: AppConfig;
-  locale: Locale;
-  runtimeStatus: RuntimeStatus | null;
-  busy: boolean;
-  onEnsureRuntime: () => void;
-  onUpdateComponent: (name: string) => void;
-  onSave: (c: AppConfig) => Promise<void>;
-  onRefreshRuntime: () => void;
-  onEmbedSaved: (message: string) => void;
-  runtimeLogLines: string[];
-}) {
-  const [draft, setDraft] = useState(cfg);
-  const [embedDoc, setEmbedDoc] = useState<GlobalEmbedDoc | null>(null);
-  const [embedForm, setEmbedForm] = useState<EmbedForm | null>(null);
-  const [embedError, setEmbedError] = useState("");
-  useEffect(() => setDraft(cfg), [cfg]);
-  useEffect(() => {
-    let cancelled = false;
-    getGlobalEmbed()
-      .then((doc) => {
-        if (cancelled) return;
-        setEmbedDoc(doc);
-        setEmbedForm(embedFormFromDoc(doc));
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [runtimeStatus?.ready]);
-
-  const saveEmbed = async () => {
-    if (!embedForm || !embedDoc) return;
-    const invalid = embedFormError(embedForm);
-    if (invalid === "port") {
-      setEmbedError(m.embedInvalidPort);
-      return;
-    }
-    if (invalid === "model") {
-      setEmbedError(m.embedInvalidModel);
-      return;
-    }
-    if (invalid === "threshold") {
-      setEmbedError(m.embedInvalidThreshold);
-      return;
-    }
-    if (invalid === "timeout") {
-      setEmbedError(m.embedInvalidTimeout);
-      return;
-    }
-    try {
-      const next = embedDocFromForm(embedDoc, embedForm);
-      await saveGlobalEmbed(next);
-      setEmbedDoc(next);
-      setEmbedError("");
-      onEmbedSaved(m.embedSaved);
-      onRefreshRuntime();
-    } catch (e) {
-      setEmbedError(String(e));
-    }
-  };
-
-  const monoInput = { input: { fontFamily: "var(--mantine-font-family-monospace)" } };
-
-  return (
-    <Stack gap="lg" maw={760}>
-      <Title order={3}>{m.settings}</Title>
-      <Stack gap="sm">
-        <Title order={4}>{m.runtimeTitle}</Title>
-        <Text size="sm" c="dimmed">
-          {runtimeStatus?.ready ? m.runtimeReady : m.runtimeNotReady}
-        </Text>
-        <Group>
-          <Button size="xs" disabled={busy} onClick={onEnsureRuntime}>
-            {m.runtimeEnsure}
-          </Button>
-          <Button size="xs" variant="subtle" disabled={busy} onClick={onRefreshRuntime}>
-            {m.refresh}
-          </Button>
-        </Group>
-        {(busy || runtimeLogLines.length > 0) && (
-          <ScrollArea h={120}>
-            <Text size="xs" ff="monospace" style={{ whiteSpace: "pre-wrap" }}>
-              {runtimeLogLines.length > 0 ? runtimeLogLines.join("\n") : m.runtimeUpdating}
-            </Text>
-          </ScrollArea>
-        )}
-        <Stack gap="xs">
-          {runtimeStatus?.components.map((c) => (
-            <Group key={c.name} justify="space-between" wrap="nowrap">
-              <Text size="sm">
-                <Text span fw={600}>
-                  {c.name}
-                </Text>{" "}
-                {c.installed
-                  ? c.latest && c.version && c.latest !== c.version
-                    ? `${c.version} → ${c.latest}`
-                    : c.version || "ok"
-                  : c.latest
-                    ? `— → ${c.latest}`
-                    : "—"}{" "}
-                ·{" "}
-                <Text span ff="monospace" size="xs">
-                  {c.path || "—"}
-                </Text>
-              </Text>
-              {c.managedByConsole === true && (c.installed || c.name === "imprint") && (
-                <Button size="xs" variant="subtle" disabled={busy} onClick={() => onUpdateComponent(c.name)}>
-                  {m.runtimeUpdate}
-                </Button>
-              )}
-            </Group>
-          ))}
-        </Stack>
-      </Stack>
-
-      <Stack gap="sm">
-        <Title order={4}>{m.globalEmbedTitle}</Title>
-        <Text size="sm" c="dimmed">
-          {m.globalEmbedHint}
-        </Text>
-        {embedForm && (
-          <>
-            <Switch
-              label={m.globalEmbedEnabled}
-              checked={embedForm.enabled}
-              onChange={(e) => setEmbedForm({ ...embedForm, enabled: e.currentTarget.checked })}
-            />
-            <TextInput label="package" value={embedForm.package} readOnly styles={monoInput} />
-            <SimpleGrid cols={{ base: 1, sm: 2 }}>
-              <NumberInput
-                label={m.embedPort}
-                description="port"
-                min={1}
-                max={65535}
-                value={embedForm.port}
-                onChange={(v) => setEmbedForm({ ...embedForm, port: v === "" ? "" : String(v) })}
-              />
-              <NumberInput
-                label={m.embedTimeout}
-                description="timeout_seconds"
-                min={1}
-                max={3600}
-                value={embedForm.timeoutSeconds}
-                onChange={(v) =>
-                  setEmbedForm({ ...embedForm, timeoutSeconds: v === "" ? "" : String(v) })
-                }
-              />
-              <NumberInput
-                label={m.embedDuplicate}
-                description="duplicate_threshold"
-                min={0}
-                max={1}
-                step={0.01}
-                decimalScale={2}
-                value={embedForm.duplicateThreshold}
-                onChange={(v) =>
-                  setEmbedForm({ ...embedForm, duplicateThreshold: v === "" ? "" : String(v) })
-                }
-              />
-              <NumberInput
-                label={m.embedContradiction}
-                description="relate_contradiction_min"
-                min={0}
-                max={1}
-                step={0.01}
-                decimalScale={2}
-                value={embedForm.relateContradictionMin}
-                onChange={(v) =>
-                  setEmbedForm({
-                    ...embedForm,
-                    relateContradictionMin: v === "" ? "" : String(v),
-                  })
-                }
-              />
-              <NumberInput
-                label={m.embedEntailment}
-                description="relate_entailment_min"
-                min={0}
-                max={1}
-                step={0.01}
-                decimalScale={2}
-                value={embedForm.relateEntailmentMin}
-                onChange={(v) =>
-                  setEmbedForm({ ...embedForm, relateEntailmentMin: v === "" ? "" : String(v) })
-                }
-              />
-            </SimpleGrid>
-            <TextInput
-              label={m.embedModel}
-              description="model"
-              value={embedForm.model}
-              styles={monoInput}
-              onChange={(e) => setEmbedForm({ ...embedForm, model: e.currentTarget.value })}
-            />
-            <Switch
-              label={m.embedBidirectional}
-              description="relate_bidirectional"
-              checked={embedForm.relateBidirectional}
-              onChange={(e) =>
-                setEmbedForm({ ...embedForm, relateBidirectional: e.currentTarget.checked })
-              }
-            />
-            {embedError && (
-              <Alert variant="light" color="red">
-                {embedError}
-              </Alert>
-            )}
-            <Group>
-              <Button size="xs" onClick={() => void saveEmbed()}>
-                {m.save}
-              </Button>
-            </Group>
-          </>
-        )}
-      </Stack>
-
-      <Stack gap="sm">
-        <Title order={4}>{m.settings}</Title>
-        <TextInput
-          label={m.imprintBin}
-          description={m.imprintBinHint}
-          value={draft.imprintBin}
-          styles={monoInput}
-          placeholder="imprint 或绝对路径"
-          onChange={(e) => setDraft({ ...draft, imprintBin: e.currentTarget.value })}
-        />
-        <NumberInput
-          label={m.pollMs}
-          value={draft.pollIntervalMs}
-          min={500}
-          onChange={(v) =>
-            setDraft({ ...draft, pollIntervalMs: typeof v === "number" ? v : Number(v) || 2500 })
-          }
-        />
-        <TextInput
-          label={m.hfEndpoint}
-          value={draft.hfEndpoint}
-          placeholder="https://hf-mirror.com"
-          onChange={(e) => setDraft({ ...draft, hfEndpoint: e.currentTarget.value })}
-        />
-        <TextInput
-          label={m.imprintHf}
-          value={draft.imprintHfEndpoint}
-          onChange={(e) => setDraft({ ...draft, imprintHfEndpoint: e.currentTarget.value })}
-        />
-        <Group>
-          <Button size="xs" onClick={() => onSave({ ...draft, locale })}>
-            {m.save}
-          </Button>
-        </Group>
-      </Stack>
-    </Stack>
   );
 }

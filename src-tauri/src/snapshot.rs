@@ -68,12 +68,10 @@ pub struct Snapshot {
     pub vault: String,
     pub hint: String,
     pub host: RuntimeProbe,
-    pub desk: RuntimeProbe,
     pub shelves: ShelvesStatus,
     pub embed: PluginRow,
     pub embed_health: Option<EmbedHealthDetail>,
     pub host_url: String,
-    pub desk_url: String,
     pub sidecar_log_path: String,
     pub yaml_error: String,
 }
@@ -152,7 +150,6 @@ pub fn fetch_snapshot(cfg: &AppConfig) -> Snapshot {
         vault: String::new(),
         hint: String::new(),
         host: default_probe(),
-        desk: default_probe(),
         shelves: ShelvesStatus {
             enabled: false,
             indexed: false,
@@ -173,7 +170,6 @@ pub fn fetch_snapshot(cfg: &AppConfig) -> Snapshot {
         },
         embed_health: None,
         host_url: "http://127.0.0.1:9470".into(),
-        desk_url: "http://127.0.0.1:4173".into(),
         sidecar_log_path: String::new(),
         yaml_error: String::new(),
     };
@@ -195,10 +191,8 @@ pub fn fetch_snapshot(cfg: &AppConfig) -> Snapshot {
     };
 
     snap.host_url = host_url_from_listen(&yaml_info.host_listen);
-    snap.desk_url = format!("http://127.0.0.1:{}", yaml_info.desk_port);
     snap.shelves.enabled = yaml_info.shelves_enabled;
     snap.shelves.roots = yaml_info.shelves_roots;
-    snap.desk.port = yaml_info.desk_port as i64;
 
     let cwd = std::path::Path::new(&cfg.project_root);
     let status: Result<Value, String> = run_imprint_json(cfg, cwd, &["status"]);
@@ -220,9 +214,6 @@ pub fn fetch_snapshot(cfg: &AppConfig) -> Snapshot {
             .to_string();
         if let Some(h) = v.get("host") {
             snap.host = serde_json::from_value(h.clone()).unwrap_or_else(|_| default_probe());
-        }
-        if let Some(d) = v.get("desk") {
-            snap.desk = serde_json::from_value(d.clone()).unwrap_or_else(|_| default_probe());
         }
         if let Some(s) = v.get("shelves") {
             snap.shelves = serde_json::from_value(s.clone()).unwrap_or(snap.shelves);

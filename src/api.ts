@@ -51,12 +51,10 @@ export interface Snapshot {
   vault: string;
   hint: string;
   host: RuntimeProbe;
-  desk: RuntimeProbe;
   shelves: ShelvesStatus;
   embed: PluginRow;
   embedHealth?: EmbedHealthDetail | null;
   hostUrl: string;
-  deskUrl: string;
   sidecarLogPath: string;
   yamlError: string;
 }
@@ -185,4 +183,26 @@ export function subscribeJobFinished(handler: (streamId: string) => void): Promi
   return listen<{ streamId: string }>("job-finished", (ev) => {
     handler(ev.payload.streamId);
   });
+}
+
+export type DeskRequest =
+  | { operation: "health" }
+  | { operation: "graph" }
+  | { operation: "unifiedGraph"; include_archived?: boolean }
+  | { operation: "ruleDetail"; id: string }
+  | { operation: "docsSearch"; query: string; top_k: number }
+  | { operation: "docChunk"; id: string }
+  | { operation: "docFile"; path: string }
+  | { operation: "docsStats" };
+
+export interface DeskApiError {
+  code: string;
+  message: string;
+  source: "host" | "config";
+  status?: number;
+  detail?: string;
+}
+
+export async function deskRequest<T = unknown>(request: DeskRequest): Promise<T> {
+  return invoke<T>("desk_request", { request });
 }

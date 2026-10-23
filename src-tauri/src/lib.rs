@@ -1,8 +1,10 @@
+mod commands;
 mod config;
 mod imprint;
 mod imprint_resolve;
 mod log_tail;
 mod runtime;
+mod services;
 mod snapshot;
 mod state;
 mod yaml_cfg;
@@ -59,14 +61,14 @@ fn should_stop_previous_stack(current: &str, next: &str) -> bool {
     !current.is_empty() && current != next
 }
 
-/// `imprint down` stops host and project plugins such as desk. Embed stays up.
+/// `imprint down` stops the project Host and project plugins. Embed stays up.
 fn stop_previous_stack(cfg: &config::AppConfig, next_path: &str) -> Result<bool, String> {
     if !should_stop_previous_stack(&cfg.project_root, next_path) {
         return Ok(false);
     }
     let current = normalize_project_path(&cfg.project_root);
     let snap = snapshot::fetch_snapshot(cfg);
-    let was_up = snap.host.listening || snap.desk.listening;
+    let was_up = snap.host.listening;
     let (code, stdout, stderr) =
         run_imprint_capture(cfg, std::path::Path::new(current), &["down"])?;
     if code != 0 {
@@ -454,10 +456,17 @@ fn reveal_in_finder(path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .manage(AppState::new())
+        .manage(AppState::new());
+
+    #[cfg(all(debug_assertions, feature = "e2e"))]
+    let builder = builder
+        .plugin(tauri_plugin_wdio_webdriver::init())
+        .plugin(tauri_plugin_wdio::init());
+
+    builder
         .invoke_handler(tauri::generate_handler![
             get_config,
             save_app_config,
@@ -478,6 +487,7 @@ pub fn run() {
             update_runtime_component,
             get_global_embed_cmd,
             save_global_embed_cmd,
+            commands::desk::desk_request,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

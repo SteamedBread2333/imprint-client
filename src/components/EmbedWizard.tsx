@@ -1,6 +1,6 @@
 import { Button, Group, Stack, Stepper, Text, Title } from "@mantine/core";
 import type { Messages } from "../i18n";
-import type { Snapshot } from "../api";
+import type { Snapshot } from "../platform/tauri/api";
 import { LogPanel } from "./LogPanel";
 
 export function EmbedWizard({

@@ -16,3 +16,278 @@
 .log-line.warn {
   color: var(--mantine-color-yellow-4);
 }
+
+.audit-markdown {
+  color: var(--mantine-color-dark-0);
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.audit-markdown h1,
+.audit-markdown h2,
+.audit-markdown h3 {
+  margin: 1.4em 0 0.5em;
+}
+
+.audit-markdown pre {
+  overflow-x: auto;
+  padding: 14px;
+  border: 1px solid var(--mantine-color-dark-4);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-dark-8);
+}
+
+.audit-markdown code {
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.audit-markdown img {
+  max-width: 100%;
+}
+
+.audit-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.audit-markdown th,
+.audit-markdown td {
+  padding: 8px 10px;
+  border: 1px solid var(--mantine-color-dark-4);
+}
+
+.mermaid-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.audit-shell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--app-shell-header-height, 56px));
+  max-height: calc(100dvh - var(--app-shell-header-height, 56px));
+  overflow: hidden;
+}
+
+.audit-page {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.audit-workspace {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.audit-toolbar {
+  flex: none;
+}
+
+.docs-split {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--mantine-color-dark-4);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-dark-7);
+}
+
+.docs-pane {
+  min-height: 0;
+  overflow: auto;
+}
+
+.docs-hits {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--mantine-color-dark-8);
+  border-right: 1px solid var(--mantine-color-dark-4);
+}
+
+.doc-hit {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--mantine-color-dark-4);
+  border-left: 3px solid transparent;
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-dark-7);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.doc-hit:hover {
+  border-color: var(--mantine-color-violet-7);
+  background: var(--mantine-color-dark-6);
+}
+
+.doc-hit-on {
+  border-color: var(--mantine-color-violet-5);
+  border-left-color: var(--mantine-color-violet-4);
+  background: var(--mantine-color-violet-light);
+}
+
+.docs-reader {
+  padding: 28px 32px 40px;
+}
+
+mark.search-hl {
+  background: color-mix(in srgb, var(--mantine-color-violet-4) 42%, transparent);
+  color: var(--mantine-color-violet-0);
+  border-radius: 2px;
+  padding: 0 0.12em;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--mantine-color-violet-4) 70%, transparent);
+}
+
+.doc-match-block {
+  outline: 1px solid var(--mantine-color-violet-5);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.doc-rule-range {
+  margin: 0.75em 0 1.1em;
+  padding: 0.65em 0.9em;
+  border-left: 3px solid var(--mantine-color-violet-4);
+  border-radius: 0 8px 8px 0;
+  background: var(--mantine-color-violet-light);
+}
+
+.doc-match-anchor {
+  display: inline;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.graph-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--mantine-color-dark-4);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-dark-7);
+}
+
+.graph-stage-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.graph-stage-handle {
+  flex: none;
+  width: 8px;
+  cursor: col-resize;
+  background: var(--mantine-color-dark-5);
+}
+
+.graph-stage-handle:hover,
+.graph-stage-handle:focus-visible {
+  background: var(--mantine-color-violet-7);
+}
+
+.graph-stage-detail {
+  flex: none;
+  min-width: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--mantine-color-dark-4);
+  background: var(--mantine-color-dark-8);
+}
+
+.graph-canvas,
+.force-graph,
+.force-graph-canvas,
+.force-graph-canvas svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.graph-canvas,
+.force-graph {
+  position: relative;
+}
+
+.graph-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(240px, 42%);
+  padding: 12px;
+  border: 1px solid var(--mantine-color-dark-4);
+  border-radius: var(--mantine-radius-md);
+  background: color-mix(in srgb, var(--mantine-color-dark-8) 92%, transparent);
+}
+
+.graph-legend-edges {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.legend-focus {
+  min-height: 1.2em;
+}
+
+.scope-dot {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+}
+
+.edge-swatch {
+  width: 22px;
+  border-top-width: 2px;
+}
+
+.graph-zoom {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--mantine-color-dark-4);
+  border-radius: var(--mantine-radius-sm);
+  background: var(--mantine-color-dark-6);
+  color: inherit;
+  cursor: pointer;
+}
+
+.graph-tip {
+  position: absolute;
+  z-index: 3;
+  max-width: 280px;
+  padding: 8px 10px;
+  pointer-events: none;
+  border: 1px solid var(--mantine-color-dark-3);
+  border-radius: var(--mantine-radius-sm);
+  background: var(--mantine-color-dark-8);
+}
+
+.graph-tip strong,
+.graph-tip span {
+  display: block;
+}
+
+.graph-tip span {
+  margin-top: 4px;
+  font-size: 12px;
+}
