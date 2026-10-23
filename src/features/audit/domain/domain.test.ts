@@ -5,7 +5,7 @@ import type { GraphData, GraphNode } from "./contracts";
 import { clearAuditCache, getCachedGraph, putCachedGraph } from "./cache";
 import { filterRules } from "./filters";
 import { clampDetailWidth, graphFit, graphFromUnified, graphStructureKey, pickForGraph } from "./graph-model";
-import { highlightInElement, renderSafeMarkdown, splitHighlight } from "./markdown";
+import { headingSection, highlightInElement, renderSafeMarkdown, splitHighlight } from "./markdown";
 import { defaultAuditUrlState, parseAuditUrl, serializeAuditUrl } from "./url-state";
 
 const node = (id: string, scope: string[], confidence = 0.7): GraphNode => ({
@@ -141,5 +141,7 @@ describe("audit domain", () => {
     highlightInElement(root, "audit");
     expect(root.querySelector("p mark.search-hl")?.textContent).toBe("audit");
     expect(root.querySelector("code mark")).toBeNull();
+    const section = headingSection("# Architecture\n\nIntro\n\n## Audit data flow\n\nThe gateway.\n\n## Runtime\n\nHost.\n", "Audit data flow");
+    expect(section).toEqual({ start: 5, end: 8 });
   });
 });

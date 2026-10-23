@@ -92,10 +92,33 @@ export function renderDocBody(content: string, lineStart?: number, lineEnd?: num
   ].join("");
 }
 
-export function highlightInElement(root: HTMLElement, query: string) {
-  const terms = searchTerms(query);
-  if (!terms.length) return;
-  const pattern = new RegExp(`(${terms.map(escapeRegExp).join("|")})`, "gi");
+export function headingSection(content: string, heading: string): { start: number; end: number } | null {
+  const wanted = heading.trim().toLowerCase();
+  if (!wanted) return null;
+  const lines = content.split("\n");
+  let start = -1;
+  let level = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(lines[index]);
+    if (!match) continue;
+    const title = match[2].replace(/[*_`[\]]/g, "").trim().toLowerCase();
+    if (start < 0) {
+      if (title === wanted) {
+        start = index + 1;
+        level = match[1].length;
+      }
+      continue;
+    }
+    if (match[1].length <= level) return { start, end: index };
+  }
+  return start < 0 ? null : { start, end: lines.length };
+}
+
+export function highlightTerms(root: HTMLElement, terms: string[]) {
+  const unique = [...new Set(terms.map((term) => term.trim()).filter((term) => term.length >= 2))]
+    .sort((a, b) => b.length - a.length);
+  if (!unique.length) return;
+  const pattern = new RegExp(`(${unique.map(escapeRegExp).join("|")})`, "gi");
   const skip = new Set(["SCRIPT", "STYLE", "MARK", "CODE", "PRE"]);
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const textNodes: Text[] = [];
@@ -116,4 +139,8 @@ export function highlightInElement(root: HTMLElement, query: string) {
     span.innerHTML = escaped.replace(pattern, '<mark class="search-hl">$1</mark>');
     node.replaceWith(...span.childNodes);
   }
+}
+
+export function highlightInElement(root: HTMLElement, query: string) {
+  highlightTerms(root, searchTerms(query));
 }

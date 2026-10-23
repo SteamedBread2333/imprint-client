@@ -1,11 +1,40 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Badge, Button, Code, Drawer, Group, Loader, ScrollArea, Stack, Text, Title } from "@mantine/core";
 import type { Messages } from "../../../i18n";
 import { deskClient } from "../api/desk-client";
 import type { DocFile, GraphNode } from "../domain/contracts";
-import { renderSafeMarkdown } from "../domain/markdown";
+import { headingSection, highlightTerms, renderDocBody, renderSafeMarkdown } from "../domain/markdown";
 
-type Source = { path?: string; heading?: string };
+type Source = {
+  path?: string;
+  heading?: string;
+  snippet?: string;
+  line_start?: number;
+  line_end?: number;
+};
+
+function deskFailure(error: unknown): { text: string; notFound: boolean } {
+  if (typeof error === "string") return { text: error, notFound: /document not found/i.test(error) };
+  if (error instanceof Error) {
+    return { text: error.message, notFound: /document not found/i.test(error.message) };
+  }
+  if (error && typeof error === "object") {
+    const record = error as { message?: unknown; detail?: unknown };
+    const message = typeof record.message === "string" ? record.message : "";
+    const detail = typeof record.detail === "string" ? record.detail : "";
+    const notFound = /document not found/i.test(detail) || /\b404\b/.test(message);
+    const text = [message, detail].filter(Boolean).join("\n");
+    return { text: text || "document request failed", notFound };
+  }
+  return { text: String(error), notFound: false };
+}
+
+type SourcePreview = {
+  file: DocFile;
+  heading?: string;
+  lineStart?: number;
+  lineEnd?: number;
+};
 
 function asSources(value: unknown): Source[] {
   return Array.isArray(value) ? value.filter((item) => item && typeof item === "object") as Source[] : [];
@@ -34,8 +63,10 @@ export function RuleDetail({
   const [sources, setSources] = useState<Source[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sourceFile, setSourceFile] = useState<DocFile | null>(null);
+  const [sourcePreview, setSourcePreview] = useState<SourcePreview | null>(null);
   const [sourceError, setSourceError] = useState("");
+  const [failedSource, setFailedSource] = useState<Source | null>(null);
+  const article = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -50,13 +81,36 @@ export function RuleDetail({
     return () => { active = false; };
   }, [node]);
 
-  const openPath = (path: string) => {
+  const openSource = (source: Source) => {
+    const path = source.path ?? "";
+    if (!path) return;
     setSourceError("");
-    setSourceFile(null);
+    setFailedSource(null);
+    setSourcePreview(null);
     void deskClient.docFile(path)
-      .then(setSourceFile)
-      .catch((reason) => setSourceError(String(reason)));
+      .then((file) => setSourcePreview({
+        file,
+        heading: source.heading,
+        lineStart: source.line_start,
+        lineEnd: source.line_end,
+      }))
+      .catch((reason) => {
+        const failure = deskFailure(reason);
+        setFailedSource(source);
+        setSourceError(failure.notFound ? m.sourceNotIndexed : failure.text);
+      });
   };
+
+  useEffect(() => {
+    const root = article.current;
+    if (!root || !sourcePreview) return;
+    try {
+      highlightTerms(root, [node?.id ?? "", node?.claim ?? "", sourcePreview.heading ?? ""]);
+      root.querySelector("#doc-anchor")?.scrollIntoView({ block: "center" });
+    } catch {
+      // Source content remains readable if optional highlighting cannot run.
+    }
+  }, [node, sourcePreview]);
 
   if (!node) return <Text c="dimmed" size="sm">{m.detailEmpty}</Text>;
 
@@ -74,7 +128,7 @@ export function RuleDetail({
       </Group>
       <Title order={4}>{node.heading || node.claim}</Title>
       {node.path && (
-        <Button size="compact-sm" variant="light" onClick={() => openPath(node.path ?? "")}>{node.path}</Button>
+        <Button size="compact-sm" variant="light" onClick={() => openSource({ path: node.path, heading: node.heading })}>{node.path}</Button>
       )}
       {(!node._kind || node._kind === "rule") && (
         <Stack gap={8}>
@@ -109,7 +163,7 @@ export function RuleDetail({
                   size="compact-xs"
                   variant="subtle"
                   justify="flex-start"
-                  onClick={() => openPath(String(source.path ?? ""))}
+                  onClick={() => openSource(source)}
                 >
                   {source.heading || source.path}
                 </Button>
@@ -132,16 +186,38 @@ export function RuleDetail({
         </Stack>
       )}
       <Drawer
-        opened={Boolean(sourceFile) || Boolean(sourceError)}
-        onClose={() => { setSourceFile(null); setSourceError(""); }}
+        opened={Boolean(sourcePreview) || Boolean(sourceError)}
+        onClose={() => { setSourcePreview(null); setSourceError(""); setFailedSource(null); }}
         position="right"
         size="xl"
-        title={sourceFile?.path ?? m.detailSources}
+        title={sourcePreview?.file.path ?? failedSource?.path ?? m.detailSources}
       >
-        {sourceError && <Alert color="red">{sourceError}</Alert>}
-        {sourceFile && (
+        {sourceError && (
+          <Stack gap="sm">
+            <Alert color="yellow">{sourceError}</Alert>
+            {failedSource?.path && <Code>{failedSource.path}</Code>}
+            {failedSource?.heading && <Title order={4}>{failedSource.heading}</Title>}
+            {failedSource?.snippet && <Text size="sm">{failedSource.snippet}</Text>}
+          </Stack>
+        )}
+        {sourcePreview && (
           <ScrollArea h="calc(100vh - 100px)">
-            <div className="audit-markdown" dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(sourceFile.content) }} />
+            <div
+              ref={article}
+              className="audit-markdown"
+              dangerouslySetInnerHTML={{
+                __html: (() => {
+                  const ranged = sourcePreview.lineStart
+                    ? { start: sourcePreview.lineStart, end: sourcePreview.lineEnd || sourcePreview.lineStart }
+                    : sourcePreview.heading
+                      ? headingSection(sourcePreview.file.content, sourcePreview.heading)
+                      : null;
+                  return ranged
+                    ? renderDocBody(sourcePreview.file.content, ranged.start, ranged.end)
+                    : renderSafeMarkdown(sourcePreview.file.content);
+                })(),
+              }}
+            />
           </ScrollArea>
         )}
       </Drawer>

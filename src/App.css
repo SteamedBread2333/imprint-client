@@ -65,10 +65,12 @@
 }
 
 .audit-shell {
+  --app-shell-padding: 12px;
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - var(--app-shell-header-height, 56px));
-  max-height: calc(100dvh - var(--app-shell-header-height, 56px));
+  box-sizing: border-box;
+  height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
 }
 

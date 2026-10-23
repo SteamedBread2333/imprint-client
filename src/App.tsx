@@ -277,12 +277,11 @@ export default function App() {
     setError("");
     setNotice("");
     try {
-      const opened = await openProject(path);
+      await openProject(path);
       const c = await getConfig();
       setCfg(c);
       setPage("dashboard");
       setShowEmbedWizard(false);
-      if (opened.stoppedStack) setNotice(m.stoppedPreviousStack);
       await refresh();
     } catch (e) {
       setError(String(e));
@@ -481,67 +480,71 @@ export default function App() {
         />
       </AppShell.Navbar>
       <AppShell.Main className={page === "audit" ? "audit-shell" : undefined}>
-        <Paper withBorder p="md" radius="md" mb="md">
-          <Group justify="space-between" align="flex-end" wrap="nowrap">
-            <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
-              <Text size="xs" c="dimmed">
-                {m.currentProject}
-              </Text>
-              {recentProjects.length > 1 ? (
-                <Select
-                  aria-label={m.recentPlaceholder}
-                  data={recentProjects.map((path) => ({
-                    value: path,
-                    label: projectOptionLabel(path),
-                  }))}
-                  value={cfg.projectRoot || null}
-                  disabled={switchingProject}
-                  allowDeselect={false}
-                  onChange={(next) => {
-                    if (next && next !== cfg.projectRoot) void openProjectPath(next);
-                  }}
-                />
-              ) : (
-                <Text fw={600}>
-                  {cfg.projectRoot ? projectName(cfg.projectRoot) : m.projectOptional}
+        {page !== "audit" && (
+          <Paper withBorder p="md" radius="md" mb="md">
+            <Group justify="space-between" align="flex-end" wrap="nowrap">
+              <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
+                <Text size="xs" c="dimmed">
+                  {m.currentProject}
                 </Text>
-              )}
-              {cfg.projectRoot && (
-                <Text size="xs" c="dimmed" ff="monospace" truncate title={cfg.projectRoot}>
-                  {cfg.projectRoot}
-                </Text>
-              )}
-            </Stack>
-            <Group gap="xs" wrap="nowrap">
-              {cfg.projectRoot && (
-                <Button size="xs" variant="subtle" onClick={() => onRevealPath(cfg.projectRoot)}>
-                  {m.openInFinder}
+                {recentProjects.length > 1 ? (
+                  <Select
+                    aria-label={m.recentPlaceholder}
+                    data={recentProjects.map((path) => ({
+                      value: path,
+                      label: projectOptionLabel(path),
+                    }))}
+                    value={cfg.projectRoot || null}
+                    disabled={switchingProject}
+                    allowDeselect={false}
+                    onChange={(next) => {
+                      if (next && next !== cfg.projectRoot) void openProjectPath(next);
+                    }}
+                  />
+                ) : (
+                  <Text fw={600}>
+                    {cfg.projectRoot ? projectName(cfg.projectRoot) : m.projectOptional}
+                  </Text>
+                )}
+                {cfg.projectRoot && (
+                  <Text size="xs" c="dimmed" ff="monospace" truncate title={cfg.projectRoot}>
+                    {cfg.projectRoot}
+                  </Text>
+                )}
+              </Stack>
+              <Group gap="xs" wrap="nowrap">
+                {cfg.projectRoot && (
+                  <Button size="xs" variant="subtle" onClick={() => onRevealPath(cfg.projectRoot)}>
+                    {m.openInFinder}
+                  </Button>
+                )}
+                <Button size="xs" variant="subtle" disabled={switchingProject} onClick={onPickProject}>
+                  {recentProjects.length > 0 ? m.pickAnother : m.pickProject}
                 </Button>
-              )}
-              <Button size="xs" variant="subtle" disabled={switchingProject} onClick={onPickProject}>
-                {recentProjects.length > 0 ? m.pickAnother : m.pickProject}
-              </Button>
+              </Group>
             </Group>
-          </Group>
-        </Paper>
+          </Paper>
+        )}
 
-        <Stack gap="sm" mb="md">
-          {snap?.hint && page === "dashboard" && !showEmbedWizard && (
-            <Text size="sm" c="dimmed">
-              {snap.hint}
-            </Text>
-          )}
-          {notice && (
-            <Alert variant="light">
-              {notice}
-            </Alert>
-          )}
-          {(error || snap?.yamlError) && (
-            <Alert variant="light" color="red">
-              {error || snap?.yamlError}
-            </Alert>
-          )}
-        </Stack>
+        {((snap?.hint && page === "dashboard" && !showEmbedWizard) || notice || error || snap?.yamlError) && (
+          <Stack gap="sm" mb="md">
+            {snap?.hint && page === "dashboard" && !showEmbedWizard && (
+              <Text size="sm" c="dimmed">
+                {snap.hint}
+              </Text>
+            )}
+            {notice && (
+              <Alert variant="light">
+                {notice}
+              </Alert>
+            )}
+            {(error || snap?.yamlError) && (
+              <Alert variant="light" color="red">
+                {error || snap?.yamlError}
+              </Alert>
+            )}
+          </Stack>
+        )}
 
         {page === "dashboard" && showEmbedWizard && (
           <EmbedWizard
